@@ -772,6 +772,18 @@ func _exit_tree() -> void:
 		k.pressed = true
 		ui_post_key(k)
 		_game_thread.wait_to_finish()
-	# Drop game references so RefCounted objects are freed before shutdown.
+	# Tear down the game object graph (breaks reference cycles so RefCounted
+	# objects are actually freed instead of leaked at exit) and drop globals.
+	# Drop the thread first: its bound callable still references the game.
+	_game_thread = null
+	if _game != null:
+		_game.shutdown()
 	_game = null
-	Session.the_session = null
+	Session.shutdown_all()
+	Models.clear_statics()
+	RogueGame.options = null
+	RogueGame.key_bindings = null
+	RogueGame.hints = null
+	GameImages.clear_cache()
+	if _sound_manager != null:
+		_sound_manager.shutdown()

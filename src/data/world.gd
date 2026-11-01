@@ -87,3 +87,11 @@ static func deserialize_data(data: Dictionary) -> World:
 			if d != null:
 				d.resolve_refs(w)
 	return w
+
+
+## Sever references at shutdown (breaks world -> district -> map cycles).
+func shutdown() -> void:
+	for d in districts_grid:
+		if d != null:
+			d.shutdown()
+	districts_grid.clear()

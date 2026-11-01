@@ -1015,3 +1015,41 @@ func resolve_refs(world: World) -> void:
 		c.resolve_refs(world)
 	for inv in ground_items_by_position.values():
 		inv.resolve_refs(world)
+
+
+## Sever all references at shutdown so the whole map graph (tiles, actors,
+## map objects, corpses, exits, ...) can be freed by refcounting.
+func shutdown() -> void:
+	for a in actors_list:
+		a.shutdown()
+	actors_list.clear()
+	aux_actors_by_position.clear()
+	for o in map_objects_list:
+		o.shutdown()
+	map_objects_list.clear()
+	aux_map_objects_by_position.clear()
+	for c in corpses_list:
+		c.shutdown()
+	corpses_list.clear()
+	aux_corpses_by_position.clear()
+	for inv in ground_items_by_position.values():
+		inv.clear_all()
+	ground_items_by_position.clear()
+	for inv in aux_ground_items_list:
+		inv.clear_all()
+	aux_ground_items_list.clear()
+	for e in exits.values():
+		e.to_map = null
+	exits.clear()
+	_exit_refs.clear()
+	tiles.clear()
+	zones.clear()
+	scents.clear()
+	aux_scents_by_position.clear()
+	timers.clear()
+	district = null
+	local_time = null
+
+
+static var zz_maps := 0
+static var zz_actors := 0

@@ -128,3 +128,13 @@ static func deserialize_data(data: Dictionary) -> District:
 func resolve_refs(world: World) -> void:
 	for m in maps:
 		m.resolve_refs(world)
+
+
+## Sever references at shutdown (breaks district <-> map cycles).
+func shutdown() -> void:
+	for m in maps:
+		m.shutdown()
+	maps.clear()
+	entry_map = null
+	sewers_map = null
+	subway_map = null

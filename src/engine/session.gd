@@ -923,3 +923,49 @@ static func apply_scalar_vars(obj: Object, data: Dictionary) -> void:
 					obj.set(p.name, data[p.name])
 
 # endregion
+
+
+## Sever all references at shutdown so the session/world object graph can
+## be freed by refcounting (breaks session <-> world <-> map cycles).
+func shutdown() -> void:
+	if world != null:
+		world.shutdown()
+	world = null
+	if current_map != null:
+		current_map.shutdown()
+	current_map = null
+	world_time = null
+	if scoring != null:
+		for m in scoring._visited_maps:
+			if m != null:
+				m.shutdown()
+	scoring = null
+	event_raids = null
+	stats = null
+	if unique_actors != null:
+		for ua in unique_actors.to_array():
+			if ua != null:
+				ua.the_actor = null
+	unique_actors = null
+	if unique_items != null:
+		for ui in [unique_items.the_subway_worker_badge]:
+			if ui != null:
+				ui.the_item = null
+	unique_items = null
+	if unique_maps != null:
+		for um in [unique_maps.char_underground_facility, unique_maps.police_station_offices_level,
+				unique_maps.police_station_jails_level, unique_maps.hospital_admissions,
+				unique_maps.hospital_offices, unique_maps.hospital_patients,
+				unique_maps.hospital_storage, unique_maps.hospital_power]:
+			if um != null:
+				if um.the_map != null:
+					um.the_map.shutdown()
+				um.the_map = null
+	unique_maps = null
+
+
+## Static shutdown helper: tear down and drop the global session instance.
+static func shutdown_all() -> void:
+	if the_session != null:
+		the_session.shutdown()
+		the_session = null

@@ -23,3 +23,8 @@ func add_enemy(other: Faction) -> void:
 
 func is_enemy_of(other: Faction) -> bool:
 	return other != self and enemies.has(other)
+
+
+## Sever references at shutdown (breaks faction <-> faction enemy cycles).
+func shutdown() -> void:
+	enemies.clear()

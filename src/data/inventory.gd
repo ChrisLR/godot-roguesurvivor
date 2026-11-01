@@ -403,3 +403,8 @@ static func deserialize_data(data: Dictionary) -> Inventory:
 func resolve_refs(world: World) -> void:
 	for it in _items:
 		it.resolve_refs(world)
+
+
+## Drop all items (used at shutdown to free the object graph).
+func clear_all() -> void:
+	_items.clear()

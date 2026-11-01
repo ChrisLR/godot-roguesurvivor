@@ -68,3 +68,10 @@ func resolve_refs(world: World) -> void:
 	for pair in _pending_refs:
 		pair[0].call(Session.resolve_ref(world, pair[1]))
 	_pending_refs.clear()
+
+
+## Sever references at shutdown (breaks corpse <-> actor cycles).
+func shutdown() -> void:
+	dead_guy = null
+	dragged_by = null
+	_pending_refs.clear()

@@ -189,3 +189,15 @@ func play_sfx(sfxname: String) -> void:
 
 func dispose() -> void:
 	stop()
+
+
+## Release cached audio streams (shutdown).
+func shutdown() -> void:
+	_queue_mutex.lock()
+	_queue.clear()
+	_queue_mutex.unlock()
+	_sounds.clear()
+	if _music_player != null:
+		_music_player.stop()
+	for p in _sfx_players:
+		p.stop()

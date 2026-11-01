@@ -16627,3 +16627,27 @@ func add_dev_misc_stuff() -> void:
 
 func draw_tile_dev(m: Map, t: Tile, x: int, y: int, to_screen: Vector2i) -> void:
 	pass
+
+
+## Sever all references at shutdown so the game object graph can be freed
+## by refcounting (the session/world part is handled by Session.shutdown_all).
+func shutdown() -> void:
+	ui = null
+	rules = null
+	session = null
+	hi_score_table = null
+	message_manager = null
+	overlays.clear()
+	player = null
+	player_fov.clear()
+	hint_available_overlay = null
+	town_generator = null
+	music_manager = null
+	char_gen = null
+	manual = null
+	game_factions = null
+	game_actors = null
+	game_items = null
+	game_tiles = null
+	player_long_wait_end = null
+	_debug_prev_ai_actor = null

@@ -1038,3 +1038,9 @@ static func image_ids() -> Array:
 
 
 # __END__
+
+
+## Drop all cached textures (shutdown, frees the image resources).
+static func clear_cache() -> void:
+	s_images.clear()
+	s_gray_level_images.clear()

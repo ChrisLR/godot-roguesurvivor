@@ -277,3 +277,9 @@ func resolve_refs(world: World) -> void:
 	for pair in _pending_refs:
 		pair[0].call(Location.deserialize_data(world, pair[1]))
 	_pending_refs.clear()
+
+
+## Sever references at shutdown (breaks map_object -> location -> map cycle).
+func shutdown() -> void:
+	location = null
+	_pending_refs.clear()

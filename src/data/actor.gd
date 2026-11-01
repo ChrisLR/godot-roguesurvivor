@@ -782,3 +782,24 @@ func resolve_refs(world: World) -> void:
 	_raw_refs.clear()
 	if inventory != null:
 		inventory.resolve_refs(world)
+
+
+## Sever all object references at shutdown so cyclic RefCounted graphs
+## (actor <-> location/map/controller/corpse/other actors) can be freed.
+func shutdown() -> void:
+	controller = null  # setter calls leave_control(), clearing the back-ref
+	location = null
+	target_actor = null
+	leader = null
+	followers = null
+	aggressor_of = null
+	self_defence_from = null
+	dragged_corpse = null
+	_trust_list = null
+	inventory = null
+	doll = null
+	sheet = null
+	current_melee_attack = null
+	current_ranged_attack = null
+	current_defence = null
+	_raw_refs.clear()
