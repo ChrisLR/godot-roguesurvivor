@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://je0v05iihk24"
+
+[deps]
+
+files=["res://assets/Data/Items_Barricading.NAME.translation", "res://assets/Data/Items_Barricading.PLURAL.translation", "res://assets/Data/Items_Barricading.VALUE.translation", "res://assets/Data/Items_Barricading.STACKINGLIMIT.translation", "res://assets/Data/Items_Barricading.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Barricading.csv"
+dest_files=["res://assets/Data/Items_Barricading.NAME.translation", "res://assets/Data/Items_Barricading.PLURAL.translation", "res://assets/Data/Items_Barricading.VALUE.translation", "res://assets/Data/Items_Barricading.STACKINGLIMIT.translation", "res://assets/Data/Items_Barricading.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

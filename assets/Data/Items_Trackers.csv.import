@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bxilo24fk0ivm"
+
+[deps]
+
+files=["res://assets/Data/Items_Trackers.NAME.translation", "res://assets/Data/Items_Trackers.PLURAL.translation", "res://assets/Data/Items_Trackers.BATTERIES in hours.translation", "res://assets/Data/Items_Trackers.HASCLOCK.translation", "res://assets/Data/Items_Trackers.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Trackers.csv"
+dest_files=["res://assets/Data/Items_Trackers.NAME.translation", "res://assets/Data/Items_Trackers.PLURAL.translation", "res://assets/Data/Items_Trackers.BATTERIES in hours.translation", "res://assets/Data/Items_Trackers.HASCLOCK.translation", "res://assets/Data/Items_Trackers.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

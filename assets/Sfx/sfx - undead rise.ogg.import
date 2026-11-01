@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://c6du3adln8y3m"
+path="res://.godot/imported/sfx - undead rise.ogg-cfae3cc5ba7f41bcb6c6cd4b47c59ca4.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/Sfx/sfx - undead rise.ogg"
+dest_files=["res://.godot/imported/sfx - undead rise.ogg-cfae3cc5ba7f41bcb6c6cd4b47c59ca4.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

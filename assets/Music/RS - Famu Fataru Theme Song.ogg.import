@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://cx3b2q818jckt"
+path="res://.godot/imported/RS - Famu Fataru Theme Song.ogg-7da39bfae42006a98cdf0c6c948ef3ed.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/Music/RS - Famu Fataru Theme Song.ogg"
+dest_files=["res://.godot/imported/RS - Famu Fataru Theme Song.ogg-7da39bfae42006a98cdf0c6c948ef3ed.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

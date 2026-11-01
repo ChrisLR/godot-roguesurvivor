@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://bl4apyscmhy4k"
+path="res://.godot/imported/RS - Survivors.ogg-a7773be0703d7f327abbba88ffb6d83e.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/Music/RS - Survivors.ogg"
+dest_files=["res://.godot/imported/RS - Survivors.ogg-a7773be0703d7f327abbba88ffb6d83e.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

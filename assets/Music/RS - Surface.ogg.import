@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://cxkfhfuc6vlr6"
+path="res://.godot/imported/RS - Surface.ogg-51a59989de9861b2ff7d82ee56f33a05.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/Music/RS - Surface.ogg"
+dest_files=["res://.godot/imported/RS - Surface.ogg-51a59989de9861b2ff7d82ee56f33a05.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

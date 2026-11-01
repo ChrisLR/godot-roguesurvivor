@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://xsvv6l83kyyt"
+
+[deps]
+
+files=["res://assets/Data/Skills.NAME.translation", "res://assets/Data/Skills.VALUE1.translation", "res://assets/Data/Skills.VALUE2.translation", "res://assets/Data/Skills.VALUE3.translation", "res://assets/Data/Skills.VALUE4.translation"]
+
+source_file="res://assets/Data/Skills.csv"
+dest_files=["res://assets/Data/Skills.NAME.translation", "res://assets/Data/Skills.VALUE1.translation", "res://assets/Data/Skills.VALUE2.translation", "res://assets/Data/Skills.VALUE3.translation", "res://assets/Data/Skills.VALUE4.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

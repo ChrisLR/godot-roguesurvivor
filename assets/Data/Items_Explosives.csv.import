@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dmovpseyqntb6"
+
+[deps]
+
+files=["res://assets/Data/Items_Explosives.NAME.translation", "res://assets/Data/Items_Explosives.PLURAL.translation", "res://assets/Data/Items_Explosives.FUSE.translation", "res://assets/Data/Items_Explosives.MAXTHROW.translation", "res://assets/Data/Items_Explosives.STACKINGLIMIT.translation", "res://assets/Data/Items_Explosives.RADIUS.translation", "res://assets/Data/Items_Explosives.BLAST0.translation", "res://assets/Data/Items_Explosives.BLAST1.translation", "res://assets/Data/Items_Explosives.BLAST2.translation", "res://assets/Data/Items_Explosives.BLAST3.translation", "res://assets/Data/Items_Explosives.BLAST4.translation", "res://assets/Data/Items_Explosives.BLAST5.translation", "res://assets/Data/Items_Explosives.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Explosives.csv"
+dest_files=["res://assets/Data/Items_Explosives.NAME.translation", "res://assets/Data/Items_Explosives.PLURAL.translation", "res://assets/Data/Items_Explosives.FUSE.translation", "res://assets/Data/Items_Explosives.MAXTHROW.translation", "res://assets/Data/Items_Explosives.STACKINGLIMIT.translation", "res://assets/Data/Items_Explosives.RADIUS.translation", "res://assets/Data/Items_Explosives.BLAST0.translation", "res://assets/Data/Items_Explosives.BLAST1.translation", "res://assets/Data/Items_Explosives.BLAST2.translation", "res://assets/Data/Items_Explosives.BLAST3.translation", "res://assets/Data/Items_Explosives.BLAST4.translation", "res://assets/Data/Items_Explosives.BLAST5.translation", "res://assets/Data/Items_Explosives.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

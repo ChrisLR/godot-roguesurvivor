@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://dpujl84n7r2o4"
+path="res://.godot/imported/RS - Sleep - Loop.ogg-6c2eae09cab6a23a6d4445df408af1ab.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/Music/RS - Sleep - Loop.ogg"
+dest_files=["res://.godot/imported/RS - Sleep - Loop.ogg-6c2eae09cab6a23a6d4445df408af1ab.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

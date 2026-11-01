@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://4ugk6i2txwnx"
+
+[deps]
+
+files=["res://assets/Data/Items_Food.NAME.translation", "res://assets/Data/Items_Food.PLURAL.translation", "res://assets/Data/Items_Food.NUTRITION ratio of base food points.translation", "res://assets/Data/Items_Food.BESTBEFORE in days.translation", "res://assets/Data/Items_Food.STACKINGLIMIT.translation", "res://assets/Data/Items_Food.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Food.csv"
+dest_files=["res://assets/Data/Items_Food.NAME.translation", "res://assets/Data/Items_Food.PLURAL.translation", "res://assets/Data/Items_Food.NUTRITION ratio of base food points.translation", "res://assets/Data/Items_Food.BESTBEFORE in days.translation", "res://assets/Data/Items_Food.STACKINGLIMIT.translation", "res://assets/Data/Items_Food.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cudhh1ow7gne6"
+
+[deps]
+
+files=["res://assets/Data/Items_Traps.NAME.translation", "res://assets/Data/Items_Traps.PLURAL.translation", "res://assets/Data/Items_Traps.STACKING.translation", "res://assets/Data/Items_Traps.ACTIVATES WHEN DROPPED?.translation", "res://assets/Data/Items_Traps.USE TO ACTIVATE?.translation", "res://assets/Data/Items_Traps.TRIGGER CHANCE per quantity.translation", "res://assets/Data/Items_Traps.DAMAGE per quantity.translation", "res://assets/Data/Items_Traps.DESACTIVATES WHEN TRIGGERED�?.translation", "res://assets/Data/Items_Traps.BREAK CHANCE when TRIGGERED.translation", "res://assets/Data/Items_Traps.BLOCK CHANCE per item.translation", "res://assets/Data/Items_Traps.BREAK CHANCE when ESCAPE.translation", "res://assets/Data/Items_Traps.IS NOISY?.translation", "res://assets/Data/Items_Traps.NOISE NAME.translation", "res://assets/Data/Items_Traps.IS.translation", "res://assets/Data/Items_Traps.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Traps.csv"
+dest_files=["res://assets/Data/Items_Traps.NAME.translation", "res://assets/Data/Items_Traps.PLURAL.translation", "res://assets/Data/Items_Traps.STACKING.translation", "res://assets/Data/Items_Traps.ACTIVATES WHEN DROPPED?.translation", "res://assets/Data/Items_Traps.USE TO ACTIVATE?.translation", "res://assets/Data/Items_Traps.TRIGGER CHANCE per quantity.translation", "res://assets/Data/Items_Traps.DAMAGE per quantity.translation", "res://assets/Data/Items_Traps.DESACTIVATES WHEN TRIGGERED�?.translation", "res://assets/Data/Items_Traps.BREAK CHANCE when TRIGGERED.translation", "res://assets/Data/Items_Traps.BLOCK CHANCE per item.translation", "res://assets/Data/Items_Traps.BREAK CHANCE when ESCAPE.translation", "res://assets/Data/Items_Traps.IS NOISY?.translation", "res://assets/Data/Items_Traps.NOISE NAME.translation", "res://assets/Data/Items_Traps.IS.translation", "res://assets/Data/Items_Traps.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

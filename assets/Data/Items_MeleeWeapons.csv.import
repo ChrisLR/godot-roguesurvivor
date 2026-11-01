@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bcdx4gdg8rd6u"
+
+[deps]
+
+files=["res://assets/Data/Items_MeleeWeapons.NAME.translation", "res://assets/Data/Items_MeleeWeapons.PLURAL.translation", "res://assets/Data/Items_MeleeWeapons.ATK.translation", "res://assets/Data/Items_MeleeWeapons.DMG.translation", "res://assets/Data/Items_MeleeWeapons.STA.translation", "res://assets/Data/Items_MeleeWeapons.DISARM.translation", "res://assets/Data/Items_MeleeWeapons.TOOLBASHDMGBONUS.translation", "res://assets/Data/Items_MeleeWeapons.TOOLBUILDBONUS.translation", "res://assets/Data/Items_MeleeWeapons.STACKINGLIMIT.translation", "res://assets/Data/Items_MeleeWeapons.ISFRAGILE.translation", "res://assets/Data/Items_MeleeWeapons.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_MeleeWeapons.csv"
+dest_files=["res://assets/Data/Items_MeleeWeapons.NAME.translation", "res://assets/Data/Items_MeleeWeapons.PLURAL.translation", "res://assets/Data/Items_MeleeWeapons.ATK.translation", "res://assets/Data/Items_MeleeWeapons.DMG.translation", "res://assets/Data/Items_MeleeWeapons.STA.translation", "res://assets/Data/Items_MeleeWeapons.DISARM.translation", "res://assets/Data/Items_MeleeWeapons.TOOLBASHDMGBONUS.translation", "res://assets/Data/Items_MeleeWeapons.TOOLBUILDBONUS.translation", "res://assets/Data/Items_MeleeWeapons.STACKINGLIMIT.translation", "res://assets/Data/Items_MeleeWeapons.ISFRAGILE.translation", "res://assets/Data/Items_MeleeWeapons.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

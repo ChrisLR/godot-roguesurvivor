@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://jqm6cxws672s"
+
+[deps]
+
+files=["res://assets/Data/Items_Entertainment.NAME.translation", "res://assets/Data/Items_Entertainment.PLURAL.translation", "res://assets/Data/Items_Entertainment.STACKING.translation", "res://assets/Data/Items_Entertainment.VALUE.translation", "res://assets/Data/Items_Entertainment.BORE CHANCE per use.translation", "res://assets/Data/Items_Entertainment.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Entertainment.csv"
+dest_files=["res://assets/Data/Items_Entertainment.NAME.translation", "res://assets/Data/Items_Entertainment.PLURAL.translation", "res://assets/Data/Items_Entertainment.STACKING.translation", "res://assets/Data/Items_Entertainment.VALUE.translation", "res://assets/Data/Items_Entertainment.BORE CHANCE per use.translation", "res://assets/Data/Items_Entertainment.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

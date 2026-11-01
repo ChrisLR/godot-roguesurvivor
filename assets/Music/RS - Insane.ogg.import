@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://bj7gdynuraj3q"
+path="res://.godot/imported/RS - Insane.ogg-d83cbcbde10d3ff8104854b17a723f6d.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/Music/RS - Insane.ogg"
+dest_files=["res://.godot/imported/RS - Insane.ogg-d83cbcbde10d3ff8104854b17a723f6d.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

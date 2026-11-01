@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cr2aqie84l6j2"
+
+[deps]
+
+files=["res://assets/Data/Items_Armors.NAME.translation", "res://assets/Data/Items_Armors.PLURAL.translation", "res://assets/Data/Items_Armors.PRO.translation", "res://assets/Data/Items_Armors.PRO.translation", "res://assets/Data/Items_Armors.ENC.translation", "res://assets/Data/Items_Armors.WEIGHT.translation", "res://assets/Data/Items_Armors.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Armors.csv"
+dest_files=["res://assets/Data/Items_Armors.NAME.translation", "res://assets/Data/Items_Armors.PLURAL.translation", "res://assets/Data/Items_Armors.PRO.translation", "res://assets/Data/Items_Armors.PRO.translation", "res://assets/Data/Items_Armors.ENC.translation", "res://assets/Data/Items_Armors.WEIGHT.translation", "res://assets/Data/Items_Armors.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

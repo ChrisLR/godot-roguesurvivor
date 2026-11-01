@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://t3kiaj7wpftd"
+
+[deps]
+
+files=["res://assets/Data/Actors.NAME.translation", "res://assets/Data/Actors.PLURAL.translation", "res://assets/Data/Actors.SPD.translation", "res://assets/Data/Actors.HP.translation", "res://assets/Data/Actors.STA.translation", "res://assets/Data/Actors.ATK.translation", "res://assets/Data/Actors.DMG.translation", "res://assets/Data/Actors.DEF.translation", "res://assets/Data/Actors.PRO.translation", "res://assets/Data/Actors.PRO.translation", "res://assets/Data/Actors.FOV.translation", "res://assets/Data/Actors.AUDIO.translation", "res://assets/Data/Actors.SMELL.translation", "res://assets/Data/Actors.SCORE.translation", "res://assets/Data/Actors.FLAVOR.translation"]
+
+source_file="res://assets/Data/Actors.csv"
+dest_files=["res://assets/Data/Actors.NAME.translation", "res://assets/Data/Actors.PLURAL.translation", "res://assets/Data/Actors.SPD.translation", "res://assets/Data/Actors.HP.translation", "res://assets/Data/Actors.STA.translation", "res://assets/Data/Actors.ATK.translation", "res://assets/Data/Actors.DMG.translation", "res://assets/Data/Actors.DEF.translation", "res://assets/Data/Actors.PRO.translation", "res://assets/Data/Actors.PRO.translation", "res://assets/Data/Actors.FOV.translation", "res://assets/Data/Actors.AUDIO.translation", "res://assets/Data/Actors.SMELL.translation", "res://assets/Data/Actors.SCORE.translation", "res://assets/Data/Actors.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bvm1jevjp7xpr"
+
+[deps]
+
+files=["res://assets/Data/Items_Spraypaints.NAME.translation", "res://assets/Data/Items_Spraypaints.PLURAL.translation", "res://assets/Data/Items_Spraypaints.QUANTITY.translation", "res://assets/Data/Items_Spraypaints.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Spraypaints.csv"
+dest_files=["res://assets/Data/Items_Spraypaints.NAME.translation", "res://assets/Data/Items_Spraypaints.PLURAL.translation", "res://assets/Data/Items_Spraypaints.QUANTITY.translation", "res://assets/Data/Items_Spraypaints.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

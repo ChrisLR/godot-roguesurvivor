@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://gpficjd3kjko"
+
+[deps]
+
+files=["res://assets/Data/Items_Lights.NAME.translation", "res://assets/Data/Items_Lights.PLURAL.translation", "res://assets/Data/Items_Lights.FOV bonus.translation", "res://assets/Data/Items_Lights.BATTERIES in hours.translation", "res://assets/Data/Items_Lights.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Lights.csv"
+dest_files=["res://assets/Data/Items_Lights.NAME.translation", "res://assets/Data/Items_Lights.PLURAL.translation", "res://assets/Data/Items_Lights.FOV bonus.translation", "res://assets/Data/Items_Lights.BATTERIES in hours.translation", "res://assets/Data/Items_Lights.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

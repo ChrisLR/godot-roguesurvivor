@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://nsxwu70sh2tl"
+
+[deps]
+
+files=["res://assets/Data/Items_RangedWeapons.NAME.translation", "res://assets/Data/Items_RangedWeapons.PLURAL.translation", "res://assets/Data/Items_RangedWeapons.ATK.translation", "res://assets/Data/Items_RangedWeapons.RAPID1.translation", "res://assets/Data/Items_RangedWeapons.RAPID2.translation", "res://assets/Data/Items_RangedWeapons.DMG.translation", "res://assets/Data/Items_RangedWeapons.RANGE.translation", "res://assets/Data/Items_RangedWeapons.MAXAMMO.translation", "res://assets/Data/Items_RangedWeapons.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_RangedWeapons.csv"
+dest_files=["res://assets/Data/Items_RangedWeapons.NAME.translation", "res://assets/Data/Items_RangedWeapons.PLURAL.translation", "res://assets/Data/Items_RangedWeapons.ATK.translation", "res://assets/Data/Items_RangedWeapons.RAPID1.translation", "res://assets/Data/Items_RangedWeapons.RAPID2.translation", "res://assets/Data/Items_RangedWeapons.DMG.translation", "res://assets/Data/Items_RangedWeapons.RANGE.translation", "res://assets/Data/Items_RangedWeapons.MAXAMMO.translation", "res://assets/Data/Items_RangedWeapons.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

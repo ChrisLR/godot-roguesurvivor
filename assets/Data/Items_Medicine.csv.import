@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dw3dixv4t0tvf"
+
+[deps]
+
+files=["res://assets/Data/Items_Medicine.NAME.translation", "res://assets/Data/Items_Medicine.PLURAL.translation", "res://assets/Data/Items_Medicine.HP.translation", "res://assets/Data/Items_Medicine.STA.translation", "res://assets/Data/Items_Medicine.SLP.translation", "res://assets/Data/Items_Medicine.INF.translation", "res://assets/Data/Items_Medicine.SAN.translation", "res://assets/Data/Items_Medicine.STACKING.translation", "res://assets/Data/Items_Medicine.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Medicine.csv"
+dest_files=["res://assets/Data/Items_Medicine.NAME.translation", "res://assets/Data/Items_Medicine.PLURAL.translation", "res://assets/Data/Items_Medicine.HP.translation", "res://assets/Data/Items_Medicine.STA.translation", "res://assets/Data/Items_Medicine.SLP.translation", "res://assets/Data/Items_Medicine.INF.translation", "res://assets/Data/Items_Medicine.SAN.translation", "res://assets/Data/Items_Medicine.STACKING.translation", "res://assets/Data/Items_Medicine.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

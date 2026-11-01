@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://kcpcwf7sjcwj"
+path="res://.godot/imported/RS - Biker.ogg-0a706d4f276c9da82f2b49a538875258.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/Music/RS - Biker.ogg"
+dest_files=["res://.godot/imported/RS - Biker.ogg-0a706d4f276c9da82f2b49a538875258.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

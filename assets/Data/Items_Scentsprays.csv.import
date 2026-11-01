@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://sqjh18yggp5q"
+
+[deps]
+
+files=["res://assets/Data/Items_Scentsprays.NAME.translation", "res://assets/Data/Items_Scentsprays.PLURAL.translation", "res://assets/Data/Items_Scentsprays.QUANTITY.translation", "res://assets/Data/Items_Scentsprays.STRENGTH in hours.translation", "res://assets/Data/Items_Scentsprays.FLAVOR.translation"]
+
+source_file="res://assets/Data/Items_Scentsprays.csv"
+dest_files=["res://assets/Data/Items_Scentsprays.NAME.translation", "res://assets/Data/Items_Scentsprays.PLURAL.translation", "res://assets/Data/Items_Scentsprays.QUANTITY.translation", "res://assets/Data/Items_Scentsprays.STRENGTH in hours.translation", "res://assets/Data/Items_Scentsprays.FLAVOR.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

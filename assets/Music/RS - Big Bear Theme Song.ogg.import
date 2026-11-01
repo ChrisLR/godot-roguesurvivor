@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://bmrk4c7g50spq"
+path="res://.godot/imported/RS - Big Bear Theme Song.ogg-870faba356528c146e31c9f12b96d245.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/Music/RS - Big Bear Theme Song.ogg"
+dest_files=["res://.godot/imported/RS - Big Bear Theme Song.ogg-870faba356528c146e31c9f12b96d245.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

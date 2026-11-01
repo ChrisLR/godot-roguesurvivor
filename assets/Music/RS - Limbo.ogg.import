@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://la37qsoej2ca"
+path="res://.godot/imported/RS - Limbo.ogg-4bb649bd38398818c20ab583272f49fe.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/Music/RS - Limbo.ogg"
+dest_files=["res://.godot/imported/RS - Limbo.ogg-4bb649bd38398818c20ab583272f49fe.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
