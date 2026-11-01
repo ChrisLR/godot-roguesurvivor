@@ -69,12 +69,13 @@ func test_player_sprite_drawn_at_player_tile() -> void:
 	# Regression: with an empty doll no image was emitted for the player.
 	game.update_player_fov(game.player)
 	game.compute_view_rect(game.player.location.position)
-	var screen := game.map_to_screen(game.player.location.position)
+	# map content is drawn in world pixels (the UI camera maps world->screen)
+	var world := game.map_to_world(game.player.location.position)
 	ui.tint_draws.clear()
 	game.redraw_play_screen()
-	var sprite_draws: Array = ui.tint_draws_at(screen.x + RogueGame.ACTOR_OFFSET, screen.y + RogueGame.ACTOR_OFFSET)
+	var sprite_draws: Array = ui.tint_draws_at(world.x + RogueGame.ACTOR_OFFSET, world.y + RogueGame.ACTOR_OFFSET)
 	assert_array(sprite_draws) \
-		.override_failure_message("actor sprite images drawn at player tile %s" % str(screen)).is_not_empty()
+		.override_failure_message("actor sprite images drawn at player tile %s" % str(world)).is_not_empty()
 
 
 func test_bedroom_item_roll_fully_covered() -> void:

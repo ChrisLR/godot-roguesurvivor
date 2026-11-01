@@ -13216,6 +13216,9 @@ func compute_view_rect(map_center: Vector2i) -> void:
 	var top := map_center.y - HALF_VIEW_HEIGHT
 	var bottom := map_center.y + HALF_VIEW_HEIGHT
 	map_view_rect = Rect2i(left, top, 1 + right - left, 1 + bottom - top)
+	# keep the UI camera on the view-rect origin so world-space map content
+	# renders exactly where the view-local UI (panels, overlays) expects it
+	ui.ui_set_camera_focus(Vector2(map_view_rect.position.x * TILE_SIZE, map_view_rect.position.y * TILE_SIZE))
 
 
 func is_in_view_rect(map_position: Vector2i) -> bool:
@@ -13383,6 +13386,8 @@ func tint_for_day_phase(phase: WorldTime.DayPhase) -> Color:
 
 #region Drawing elements
 func draw_map(map: Map, tint: Color) -> void:
+	# map content is drawn in WORLD pixels; the UI camera maps it to screen
+	ui.ui_set_world_draw(true)
 	# trim to outer map bounds.
 	var left := maxi(-1, map_view_rect.position.x)
 	var right := mini(map.width + 1, map_view_rect.end.x)
@@ -13413,7 +13418,7 @@ func draw_map(map: Map, tint: Color) -> void:
 	for x in range(left, right):
 		for y in range(top, bottom):
 			var position := Vector2i(x, y)
-			var to_screen := map_to_screen(x, y)
+			var to_screen := map_to_world(x, y)
 			var is_visible := is_visible_to_player(map, position)
 			var draw_water := false
 			var tile: Tile = map.get_tile_at(x, y) if map.is_in_bounds(x, y) else null
@@ -13488,6 +13493,7 @@ func draw_map(map: Map, tint: Color) -> void:
 				ui.ui_draw_image(weather_image, to_screen.x, to_screen.y)
 
 	# DEV scents overlay: C# #if false block, skipped.
+	ui.ui_set_world_draw(false)
 
 
 func moving_water_image(model: TileModel, turn_count: int) -> String:
@@ -14420,11 +14426,22 @@ func has_overlay(o) -> bool:
 
 #region Coordinates conversion
 ## C# overloads MapToScreen(Point) / MapToScreen(int, int) merged into one
-## dispatching function.
+## dispatching function. Returns VIEW-LOCAL screen (canvas) pixels; the map
+## itself is drawn in world pixels (map_to_world) and the UI Camera2D — kept
+## on the view-rect origin — maps world -> screen.
 func map_to_screen(a, b: int = 0) -> Vector2i:
 	if a is Vector2i:
 		return Vector2i((a.x - map_view_rect.position.x) * TILE_SIZE, (a.y - map_view_rect.position.y) * TILE_SIZE)
 	return Vector2i((a - map_view_rect.position.x) * TILE_SIZE, (b - map_view_rect.position.y) * TILE_SIZE)
+
+
+## World-space pixels of a map position (what the TileMapLayer/sprite nodes
+## under the UI camera use). The camera sits on the view-rect origin, so
+## world px render exactly at the old view-local screen px.
+func map_to_world(a, b: int = 0) -> Vector2i:
+	if a is Vector2i:
+		return Vector2i(a.x * TILE_SIZE, a.y * TILE_SIZE)
+	return Vector2i(a * TILE_SIZE, b * TILE_SIZE)
 
 
 func screen_to_map(a, b: int = 0) -> Vector2i:

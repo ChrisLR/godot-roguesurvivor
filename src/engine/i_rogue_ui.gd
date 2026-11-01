@@ -152,6 +152,21 @@ func ui_screenshot_extension() -> String:
 	return "png"
 
 
+# Draw-space / camera control (GodotRogueUI implements these; headless UIs
+# can rely on the defaults: screen-space drawing only, no camera)
+## While enabled, draw commands are in WORLD pixels (map pos * TILE_SIZE) and
+## are rendered through the UI camera; otherwise they are canvas (1024x768)
+## pixels on the screen-space HUD.
+func ui_set_world_draw(_enabled: bool) -> void:
+	pass
+
+
+## Move the UI camera so that this world pixel sits at the top-left of the
+## viewport (the engine keeps it on the map view-rect origin).
+func ui_set_camera_focus(_world_pos: Vector2) -> void:
+	pass
+
+
 # Exiting
 func ui_do_quit() -> void:
 	push_error(NOT_IMPLEMENTED)

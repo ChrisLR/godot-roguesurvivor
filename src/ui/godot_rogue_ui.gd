@@ -12,9 +12,11 @@ extends IRogueUI
 ##   - Line2D / ColorRect pools for overlay lines, rects and points.
 ##   - Control-based HUD (CanvasLayer): pooled Labels for strings, a pooled
 ##     PanelContainer for popups, and a TextureRect for the minimap.
-##   - A Camera2D defines the viewport transform, centered on the 1024x768
-##     canvas (the engine re-centers the map view itself via map_to_screen,
-##     so the camera stays fixed at the canvas center).
+##   - A Camera2D owns the world->screen transform of the map: the engine
+##     keeps it anchored (top-left) on the map view-rect origin, which follows
+##     the player (compute_view_rect -> ui_set_camera_focus). Map content is
+##     drawn in world pixels (map pos * TILE_SIZE); the HUD lives on a
+##     CanvasLayer, so panels/labels/popups/minimap stay in screen space.
 ##
 ## The game thread still only accumulates draw commands into _batch;
 ## ui_repaint() publishes the batch atomically and _process() (main thread)
@@ -70,10 +72,20 @@ var _scent_layer: Node2D
 var _items_layer: Node2D
 var _actors_layer: Node2D
 var _effects_layer: Node2D
-var _overlay_layer: Node2D
+var _overlay_layer: Control  # screen-space lines/rects/points (HUD)
+var _hud_sprites: Control  # screen-space images (inventory icons, minimap markers, menus)
 var _labels_root: Control
 var _popups_root: Control
 var _minimap_rect: TextureRect
+
+# Draw space: while _world_draw is set, commands carry world pixels (map pos
+# * TILE_SIZE) rendered through the camera; otherwise canvas (1024x768)
+# screen pixels on the HUD. Set by the game thread via ui_set_world_draw.
+var _world_draw := false
+
+# Camera follow: the game thread sets the focus (view-rect origin in world
+# px); applied to the Camera2D on the main thread.
+var _cam_target := Vector2.ZERO
 
 # Runtime TileSet atlas: every GameImages image gets two atlas sources
 # (normal + gray-level), mapped in _tile_src / _tile_src_gray.
@@ -127,11 +139,16 @@ func _init_view() -> void:
 	_items_layer = $World/Items
 	_actors_layer = $World/Actors
 	_effects_layer = $World/Effects
-	_overlay_layer = $World/OverlayShapes
+	_overlay_layer = $UILayer/HUD/Shapes
+	_hud_sprites = $UILayer/HUD/Sprites
 	_labels_root = $UILayer/HUD/Labels
 	_popups_root = $UILayer/HUD/Popups
 	_minimap_rect = $UILayer/HUD/Minimap
 	_minimap_rect.visible = false
+	# camera: top-left anchored, so camera.position is the world pixel shown
+	# at the viewport's top-left corner (the engine keeps it on the view rect)
+	_camera.anchor_mode = Camera2D.ANCHOR_MODE_FIXED_TOP_LEFT
+	_cam_target = _camera.position
 	_font = load("res://assets/fonts/DejaVuSansMono.ttf") as FontFile
 	_font_bold = load("res://assets/fonts/DejaVuSansMono-Bold.ttf") as FontFile
 	_build_tile_set()
@@ -141,6 +158,7 @@ func _init_view() -> void:
 	_register_pool("items", _items_layer, _factory_sprite(_items_layer))
 	_register_pool("actors", _actors_layer, _factory_actor)
 	_register_pool("effects", _effects_layer, _factory_sprite(_effects_layer))
+	_register_pool("screenfx", _hud_sprites, _factory_sprite(_hud_sprites))
 	_register_pool("lines", _overlay_layer, _factory_line)
 	_register_pool("rects", _overlay_layer, _factory_rect)
 	_register_pool("labels", _labels_root, _factory_label)
@@ -180,7 +198,7 @@ func _register_pool(kind: String, layer: Node, factory: Callable) -> void:
 	_pools[kind] = {"layer": layer, "nodes": [], "cursor": 0, "factory": factory}
 
 
-func _factory_sprite(layer: Node2D) -> Callable:
+func _factory_sprite(layer: Node) -> Callable:
 	return func() -> Sprite2D:
 		var spr := Sprite2D.new()
 		spr.centered = false  # top-left origin, like the C# canvas blit
@@ -297,7 +315,7 @@ func _apply_command(cmd: Dictionary) -> void:
 		"image", "gray_image":
 			_apply_image_cmd(cmd)
 		"image_transform":
-			_apply_sprite(cmd.id, int(cmd.pos.x), int(cmd.pos.y), cmd.modulate, false, cmd.rot, cmd.scale)
+			_apply_sprite(cmd.id, int(cmd.pos.x), int(cmd.pos.y), cmd.modulate, false, cmd.rot, cmd.scale, cmd.get("world", false))
 		"image_tex":
 			_minimap_rect.texture = cmd.tex
 			_minimap_rect.position = cmd.pos
@@ -348,15 +366,18 @@ func _apply_image_cmd(cmd: Dictionary) -> void:
 	var gy := int(cmd.pos.y)
 	var gray: bool = cmd.op == "gray_image"
 	var mod: Color = cmd.get("modulate", Color.WHITE)
+	var world: bool = cmd.get("world", false)
 	# TileMapLayer cells are positioned on the 32px grid and support no
-	# per-cell tint: grid-aligned, untinted tile images go to the TileMapLayers.
+	# per-cell tint: grid-aligned, untinted, world-space tile images go to
+	# the TileMapLayers; everything else to sprite pools (world layers under
+	# the camera, or the screen-space HUD pool).
 	var aligned := gx % TILE == 0 and gy % TILE == 0
-	if aligned and mod == Color.WHITE and _is_layered_tile_image(id):
+	if world and aligned and mod == Color.WHITE and _is_layered_tile_image(id):
 		var src_map: Dictionary = _tile_src_gray if gray else _tile_src
 		if src_map.has(id):
 			_tile_layer_for(id).set_cell(Vector2i(gx / TILE, gy / TILE), src_map[id], Vector2i.ZERO)
 			return
-	_apply_sprite(id, gx, gy, mod, gray)
+	_apply_sprite(id, gx, gy, mod, gray, 0.0, 1.0, world)
 
 
 func _sprite_kind(id: String) -> String:
@@ -371,8 +392,9 @@ func _sprite_kind(id: String) -> String:
 	return "effects"
 
 
-func _apply_sprite(id: String, gx: int, gy: int, mod: Color, gray: bool, rot: float = 0.0, scale: float = 1.0) -> void:
-	var node := _pool_next(_sprite_kind(id))
+func _apply_sprite(id: String, gx: int, gy: int, mod: Color, gray: bool, rot: float = 0.0, scale: float = 1.0, world: bool = true) -> void:
+	var kind := _sprite_kind(id) if world else "screenfx"
+	var node := _pool_next(kind)
 	var spr: Sprite2D = node if node is Sprite2D else node.get_child(0)
 	spr.texture = GameImages.get_gray_level(id) if gray else GameImages.get_image(id)
 	spr.modulate = mod
@@ -563,8 +585,25 @@ func ui_repaint() -> void:
 	_redraw_requested = true
 
 
+func ui_set_world_draw(enabled: bool) -> void:
+	# called from the game thread; read when tagging commands and when the
+	# main thread applies them (benign race on a bool, same as _batch)
+	_world_draw = enabled
+
+
+func ui_set_camera_focus(world_pos: Vector2) -> void:
+	# called from the game thread; the camera lives on the main thread
+	call_deferred("_set_camera_focus_deferred", world_pos)
+
+
+func _set_camera_focus_deferred(world_pos: Vector2) -> void:
+	_cam_target = world_pos
+	_camera.position = world_pos
+
+
 func _push_command(cmd: Dictionary) -> void:
 	# game-thread side only (plus _ready before the thread starts)
+	cmd["world"] = _world_draw
 	_batch.append(cmd)
 
 
