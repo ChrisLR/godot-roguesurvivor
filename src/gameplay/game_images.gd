@@ -1029,6 +1029,11 @@ static func get_gray_level(image_id: String) -> Texture2D:
 	if s_gray_level_images.has(image_id):
 		return s_gray_level_images[image_id]
 	return s_gray_level_images[UNDEF]
+
+
+## All registered image IDs (used by the UI to build its TileSet atlas).
+static func image_ids() -> Array:
+	return s_images.keys()
 # endregion
 
 

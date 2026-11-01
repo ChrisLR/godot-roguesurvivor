@@ -1,18 +1,33 @@
 class_name GodotRogueUI
 extends IRogueUI
 ## Godot implementation of IRogueUI (port of the GDI+ game canvas).
-## One canvas node draws everything the C# UI_Draw* methods drew, on a
-## 1024x768 canvas (project stretch handles scaling).
-## Images are addressed by ID string, resolved through GameImages.
+##
+## Rendering uses built-in Godot nodes instead of immediate-mode _draw():
+##   - TileMapLayer nodes (MapTiles / DecorLayer / CoverLayer) for the map
+##     tiles, tile decorations and above-entity covers (water, weather),
+##     backed by a runtime TileSet atlas built from every GameImages image.
+##   - Pooled StaticBody2D+Sprite2D nodes for map objects (interactibles),
+##     Node2D+Sprite2D for actors (characters), Sprite2D pools for corpses,
+##     items, scents and effect icons.
+##   - Line2D / ColorRect pools for overlay lines, rects and points.
+##   - Control-based HUD (CanvasLayer): pooled Labels for strings, a pooled
+##     PanelContainer for popups, and a TextureRect for the minimap.
+##   - A Camera2D defines the viewport transform, centered on the 1024x768
+##     canvas (the engine re-centers the map view itself via map_to_screen,
+##     so the camera stays fixed at the canvas center).
+##
+## The game thread still only accumulates draw commands into _batch;
+## ui_repaint() publishes the batch atomically and _process() (main thread)
+## applies it to the node tree, so a frame is never applied half-drawn.
 
 const CANVAS_WIDTH := 1024
 const CANVAS_HEIGHT := 768
+const TILE := 32
 
 # Draw commands are batched like the C# in-memory game canvas: the game
 # thread accumulates into _batch (ui_clear resets it), and ui_repaint()
 # publishes the whole batch atomically. _process() then applies the batch
-# to _commands on the main thread, so a frame can never be pumped half-drawn
-# (that was the per-keypress flicker).
+# to the node tree on the main thread.
 var _commands: Array[Dictionary] = []
 var _pending_commands: Array[Dictionary] = []
 var _batch: Array[Dictionary] = []
@@ -41,6 +56,45 @@ var _minimap: Image
 
 signal quit_requested
 
+# ------------------------------------------------------------------
+# node-based view (built-in Godot nodes, see main.tscn)
+
+var _background: ColorRect
+var _camera: Camera2D
+var _map_tiles: TileMapLayer
+var _decor_layer: TileMapLayer
+var _cover_layer: TileMapLayer
+var _corpse_layer: Node2D
+var _mapobj_layer: Node2D
+var _scent_layer: Node2D
+var _items_layer: Node2D
+var _actors_layer: Node2D
+var _effects_layer: Node2D
+var _overlay_layer: Node2D
+var _labels_root: Control
+var _popups_root: Control
+var _minimap_rect: TextureRect
+
+# Runtime TileSet atlas: every GameImages image gets two atlas sources
+# (normal + gray-level), mapped in _tile_src / _tile_src_gray.
+var _tile_set: TileSet
+var _tile_src: Dictionary = {}
+var _tile_src_gray: Dictionary = {}
+
+# Fonts (DejaVu Sans Mono, metrics chosen to fit LINE_SPACING=12 /
+# BOLD_LINE_SPACING=14 of the engine layout).
+var _font: FontFile
+var _font_bold: FontFile
+const FONT_SIZE := 10
+const FONT_SIZE_BOLD := 11
+const POPUP_LINE_HEIGHT := 14
+const POPUP_PAD := 4
+
+# Node pools, keyed by kind: {layer, nodes, cursor, factory}.
+# On "clear" every pool node is hidden and the cursor reset; commands then
+# reuse pool nodes sequentially (frames are full redraws after a clear).
+var _pools: Dictionary = {}
+
 
 func _ready() -> void:
 	_minimap = Image.create(MINIMAP_WIDTH, MINIMAP_HEIGHT, false, Image.FORMAT_RGBA8)
@@ -48,6 +102,7 @@ func _ready() -> void:
 	# Preload every image on the main thread: the game thread only reads the
 	# GameImages cache afterwards (ResourceLoader is not called off-thread).
 	GameImages.load_resources(self)
+	_init_view()
 	# Audio: created on the main thread; the game thread only queues ops that
 	# pump() applies here once per frame.
 	_sound_manager = GodotSoundManager.new()
@@ -60,24 +115,338 @@ func _ready() -> void:
 	_game_thread.start(_game.run)
 
 
+func _init_view() -> void:
+	_background = $Background
+	_camera = $Camera2D
+	_map_tiles = $World/MapTiles
+	_decor_layer = $World/DecorLayer
+	_cover_layer = $World/CoverLayer
+	_corpse_layer = $World/Corpses
+	_mapobj_layer = $World/MapObjects
+	_scent_layer = $World/Scents
+	_items_layer = $World/Items
+	_actors_layer = $World/Actors
+	_effects_layer = $World/Effects
+	_overlay_layer = $World/OverlayShapes
+	_labels_root = $UILayer/HUD/Labels
+	_popups_root = $UILayer/HUD/Popups
+	_minimap_rect = $UILayer/HUD/Minimap
+	_minimap_rect.visible = false
+	_font = load("res://assets/fonts/DejaVuSansMono.ttf") as FontFile
+	_font_bold = load("res://assets/fonts/DejaVuSansMono-Bold.ttf") as FontFile
+	_build_tile_set()
+	_register_pool("corpses", _corpse_layer, _factory_sprite(_corpse_layer))
+	_register_pool("mapobjects", _mapobj_layer, _factory_map_object)
+	_register_pool("scents", _scent_layer, _factory_sprite(_scent_layer))
+	_register_pool("items", _items_layer, _factory_sprite(_items_layer))
+	_register_pool("actors", _actors_layer, _factory_actor)
+	_register_pool("effects", _effects_layer, _factory_sprite(_effects_layer))
+	_register_pool("lines", _overlay_layer, _factory_line)
+	_register_pool("rects", _overlay_layer, _factory_rect)
+	_register_pool("labels", _labels_root, _factory_label)
+	_register_pool("popups", _popups_root, _factory_popup)
+
+
+func _build_tile_set() -> void:
+	_tile_set = TileSet.new()
+	_tile_set.tile_size = Vector2i(TILE, TILE)
+	var next_id := 1
+	for id in GameImages.image_ids():
+		var tex := GameImages.get_image(id)
+		if tex == null:
+			continue
+		_tile_src[id] = _add_atlas_source(tex, next_id)
+		next_id += 1
+		_tile_src_gray[id] = _add_atlas_source(GameImages.get_gray_level(id), next_id)
+		next_id += 1
+	_map_tiles.tile_set = _tile_set
+	_decor_layer.tile_set = _tile_set
+	_cover_layer.tile_set = _tile_set
+
+
+func _add_atlas_source(tex: Texture2D, source_id: int) -> int:
+	var src := TileSetAtlasSource.new()
+	src.texture = tex
+	src.texture_region_size = Vector2i(mini(TILE, tex.get_width()), mini(TILE, tex.get_height()))
+	src.create_tile(Vector2i.ZERO)
+	_tile_set.add_source(src, source_id)
+	return source_id
+
+
+# ------------------------------------------------------------------
+# pools
+
+func _register_pool(kind: String, layer: Node, factory: Callable) -> void:
+	_pools[kind] = {"layer": layer, "nodes": [], "cursor": 0, "factory": factory}
+
+
+func _factory_sprite(layer: Node2D) -> Callable:
+	return func() -> Sprite2D:
+		var spr := Sprite2D.new()
+		spr.centered = false  # top-left origin, like the C# canvas blit
+		layer.add_child(spr)
+		return spr
+
+
+func _factory_actor() -> Node2D:
+	var n := Node2D.new()
+	var spr := Sprite2D.new()
+	spr.centered = false
+	n.add_child(spr)
+	_actors_layer.add_child(n)
+	return n
+
+
+func _factory_map_object() -> StaticBody2D:
+	var body := StaticBody2D.new()
+	var spr := Sprite2D.new()
+	spr.centered = false
+	body.add_child(spr)
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(TILE, TILE)
+	shape.shape = rect
+	body.add_child(shape)
+	_mapobj_layer.add_child(body)
+	return body
+
+
+func _factory_line() -> Line2D:
+	var ln := Line2D.new()
+	ln.width = 1.0
+	_overlay_layer.add_child(ln)
+	return ln
+
+
+func _factory_rect() -> ColorRect:
+	var r := ColorRect.new()
+	_overlay_layer.add_child(r)
+	return r
+
+
+func _factory_label() -> Label:
+	var l := Label.new()
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_labels_root.add_child(l)
+	return l
+
+
+func _factory_popup() -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.content_margin_left = POPUP_PAD
+	style.content_margin_top = POPUP_PAD
+	style.content_margin_right = POPUP_PAD
+	style.content_margin_bottom = POPUP_PAD
+	panel.add_theme_stylebox_override("panel", style)
+	panel.set_meta("style", style)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 0)
+	panel.add_child(vbox)
+	_popups_root.add_child(panel)
+	return panel
+
+
+func _pool_next(kind: String) -> Node:
+	var p: Dictionary = _pools[kind]
+	if p.cursor >= p.nodes.size():
+		p.nodes.append(p.factory.call())
+	var n: Node = p.nodes[p.cursor]
+	p.cursor += 1
+	n.visible = true
+	return n
+
+
+func _reset_view() -> void:
+	_map_tiles.clear()
+	_decor_layer.clear()
+	_cover_layer.clear()
+	for kind in _pools.keys():
+		var p: Dictionary = _pools[kind]
+		for n in p.nodes:
+			n.visible = false
+		p.cursor = 0
+	_minimap_rect.visible = false
+
+
+# ------------------------------------------------------------------
+# batch application (main thread, from _process)
+
+func _apply_batch(batch: Array) -> void:
+	if batch.is_empty():
+		return
+	if batch[0].op == "clear":
+		_reset_view()
+		_commands = batch
+	else:
+		_commands.append_array(batch)
+	for cmd: Dictionary in batch:
+		_apply_command(cmd)
+
+
+func _apply_command(cmd: Dictionary) -> void:
+	match cmd.op:
+		"clear":
+			_background.color = cmd.color
+		"image", "gray_image":
+			_apply_image_cmd(cmd)
+		"image_transform":
+			_apply_sprite(cmd.id, int(cmd.pos.x), int(cmd.pos.y), cmd.modulate, false, cmd.rot, cmd.scale)
+		"image_tex":
+			_minimap_rect.texture = cmd.tex
+			_minimap_rect.position = cmd.pos
+			_minimap_rect.size = Vector2(MINIMAP_WIDTH, MINIMAP_HEIGHT)
+			_minimap_rect.visible = true
+		"point":
+			var p := _pool_next("rects") as ColorRect
+			p.color = cmd.color
+			p.position = cmd.pos
+			p.size = Vector2(1, 1)
+		"line":
+			var ln := _pool_next("lines") as Line2D
+			ln.points = PackedVector2Array([cmd.from, cmd.to])
+			ln.default_color = cmd.color
+		"rect":
+			# outline rect as a closed Line2D loop
+			var r: Rect2 = cmd.rect
+			var ln2 := _pool_next("lines") as Line2D
+			ln2.points = PackedVector2Array([r.position, r.position + Vector2(r.size.x, 0),
+				r.end, r.position + Vector2(0, r.size.y), r.position])
+			ln2.default_color = cmd.color
+		"fill_rect":
+			var fr := _pool_next("rects") as ColorRect
+			fr.color = cmd.color
+			fr.position = Vector2(cmd.rect.position)
+			fr.size = Vector2(cmd.rect.size)
+		"string":
+			_apply_string_cmd(cmd)
+		"popup":
+			_apply_popup_cmd(cmd)
+
+
+func _is_layered_tile_image(id: String) -> bool:
+	return id.contains("/Tiles/") or id.contains("weather_") or id.contains("map_exit")
+
+
+func _tile_layer_for(id: String) -> TileMapLayer:
+	if id.contains("/Tiles/Decoration/"):
+		return _decor_layer
+	if id.contains("water_cover") or id.contains("weather_"):
+		return _cover_layer
+	return _map_tiles
+
+
+func _apply_image_cmd(cmd: Dictionary) -> void:
+	var id: String = cmd.id
+	var gx := int(cmd.pos.x)
+	var gy := int(cmd.pos.y)
+	var gray: bool = cmd.op == "gray_image"
+	var mod: Color = cmd.get("modulate", Color.WHITE)
+	# TileMapLayer cells are positioned on the 32px grid and support no
+	# per-cell tint: grid-aligned, untinted tile images go to the TileMapLayers.
+	var aligned := gx % TILE == 0 and gy % TILE == 0
+	if aligned and mod == Color.WHITE and _is_layered_tile_image(id):
+		var src_map: Dictionary = _tile_src_gray if gray else _tile_src
+		if src_map.has(id):
+			_tile_layer_for(id).set_cell(Vector2i(gx / TILE, gy / TILE), src_map[id], Vector2i.ZERO)
+			return
+	_apply_sprite(id, gx, gy, mod, gray)
+
+
+func _sprite_kind(id: String) -> String:
+	if id.contains("/Actors/"):
+		return "actors"
+	if id.contains("/MapObjects/") or id.contains("map_exit"):
+		return "mapobjects"
+	if id.contains("/Items/"):
+		return "items"
+	if id.contains("scent"):
+		return "scents"
+	return "effects"
+
+
+func _apply_sprite(id: String, gx: int, gy: int, mod: Color, gray: bool, rot: float = 0.0, scale: float = 1.0) -> void:
+	var node := _pool_next(_sprite_kind(id))
+	var spr: Sprite2D = node if node is Sprite2D else node.get_child(0)
+	spr.texture = GameImages.get_gray_level(id) if gray else GameImages.get_image(id)
+	spr.modulate = mod
+	spr.rotation = rot
+	spr.scale = Vector2(scale, scale)
+	node.position = Vector2(gx, gy)
+
+
+func _apply_string_cmd(cmd: Dictionary) -> void:
+	var label := _pool_next("labels") as Label
+	label.text = cmd.text
+	label.position = cmd.pos
+	var bold: bool = cmd.bold
+	label.add_theme_font_override("font", _font_bold if bold else _font)
+	label.add_theme_font_size_override("font_size", FONT_SIZE_BOLD if bold else FONT_SIZE)
+	label.add_theme_color_override("font_color", cmd.color)
+	if cmd.shadow != Color.TRANSPARENT:
+		label.add_theme_color_override("font_shadow_color", cmd.shadow)
+		label.add_theme_constant_override("shadow_offset_x", 1)
+		label.add_theme_constant_override("shadow_offset_y", 1)
+	else:
+		label.remove_theme_color_override("font_shadow_color")
+		label.remove_theme_constant_override("shadow_offset_x")
+		label.remove_theme_constant_override("shadow_offset_y")
+
+
+func _apply_popup_cmd(cmd: Dictionary) -> void:
+	var panel := _pool_next("popups") as PanelContainer
+	panel.position = cmd.pos
+	var style: StyleBoxFlat = panel.get_meta("style")
+	style.bg_color = cmd.fill
+	style.border_color = cmd.border
+	var vbox := panel.get_child(0) as VBoxContainer
+	for c in vbox.get_children():
+		c.queue_free()
+	var lines: PackedStringArray = cmd.lines
+	var colors: Array = cmd.colors
+	var max_w := 0.0
+	if cmd.title != "":
+		max_w = maxf(max_w, _font_bold.get_string_size(cmd.title, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE_BOLD).x)
+	for l in lines:
+		max_w = maxf(max_w, _font.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x)
+	if cmd.title != "":
+		vbox.add_child(_make_popup_label(cmd.title, cmd.title_color, true, max_w))
+	for i in lines.size():
+		var c: Color = cmd.text_color
+		if i < colors.size() and colors[i] != null:
+			c = colors[i]
+		vbox.add_child(_make_popup_label(lines[i], c, false, max_w))
+
+
+func _make_popup_label(text: String, color: Color, bold: bool, max_w: float) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", _font_bold if bold else _font)
+	l.add_theme_font_size_override("font_size", FONT_SIZE_BOLD if bold else FONT_SIZE)
+	l.add_theme_color_override("font_color", color)
+	l.custom_minimum_size = Vector2(max_w, POPUP_LINE_HEIGHT)
+	return l
+
+
 func _process(_delta: float) -> void:
 	_update_canvas_scale()  # main thread only; window may resize at any time
-	# apply the last published frame atomically: a batch starting with
-	# "clear" replaces the canvas (C# UI_Clear), otherwise it appends
-	# (repaints without clear accumulate, like the C# game canvas)
+	# apply the last published frame atomically to the node tree: a batch
+	# starting with "clear" resets the view (C# UI_Clear), otherwise it
+	# appends (repaints without clear accumulate, like the C# game canvas)
 	_cmd_mutex.lock()
 	var batch: Array = _pending_commands
 	_pending_commands = []
 	_cmd_mutex.unlock()
 	if not batch.is_empty():
-		if batch[0].op == "clear":
-			_commands = batch
-		else:
-			_commands.append_array(batch)
-		queue_redraw()
+		_apply_batch(batch)
 	if _redraw_requested:
 		_redraw_requested = false
-		queue_redraw()
 	_sound_manager.pump()
 
 
@@ -327,71 +696,3 @@ func _quit_app() -> void:
 	if _game_thread != null and _game_thread.is_alive():
 		_game_thread.wait_to_finish()
 	get_tree().quit()
-
-
-# ------------------------------------------------------------------ _draw
-
-func _draw() -> void:
-	var font := ThemeDB.fallback_font
-	for cmd: Dictionary in _commands:
-		match cmd.op:
-			"clear":
-				draw_rect(Rect2(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT), cmd.color)
-			"image":
-				var tex: Texture2D = GameImages.get_image(cmd.id)
-				if tex != null:
-					draw_texture(tex, cmd.pos, cmd.modulate)
-			"image_tex":
-				draw_texture(cmd.tex, cmd.pos, cmd.modulate)
-			"image_transform":
-				var tex2: Texture2D = GameImages.get_image(cmd.id)
-				if tex2 != null:
-					draw_set_transform_matrix(Transform2D(cmd.rot, Vector2(cmd.scale, cmd.scale), 0.0, cmd.pos))
-					draw_texture(tex2, Vector2.ZERO, cmd.modulate)
-					draw_set_transform_matrix(Transform2D())
-			"gray_image":
-				var gray: Texture2D = GameImages.get_gray_level(cmd.id)
-				if gray != null:
-					draw_texture(gray, cmd.pos, Color.WHITE)
-			"point":
-				draw_rect(Rect2(cmd.pos, Vector2(1, 1)), cmd.color)
-			"line":
-				draw_line(cmd.from, cmd.to, cmd.color, 1.0)
-			"rect":
-				draw_rect(cmd.rect, cmd.color, false, 1.0)
-			"fill_rect":
-				draw_rect(cmd.rect, cmd.color, true)
-			"string":
-				var pos: Vector2 = cmd.pos
-				var shadow: Color = cmd.shadow
-				if shadow != Color.TRANSPARENT:
-					draw_string(font, pos + Vector2(1, 1), cmd.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, shadow)
-				draw_string(font, pos, cmd.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, cmd.color)
-			"popup":
-				_draw_popup_cmd(cmd, font)
-	if _redraw_requested:
-		_redraw_requested = false
-
-
-func _draw_popup_cmd(cmd: Dictionary, font: Font) -> void:
-	var lines: PackedStringArray = cmd.lines
-	var colors: Array = cmd.colors
-	var line_h := 14
-	var pad := 4
-	var title_h := line_h + 2 if cmd.title != "" else 0
-	var max_w := 0
-	for l: String in lines:
-		max_w = maxi(max_w, int(font.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x))
-	var box := Rect2(cmd.pos, Vector2(max_w + 2 * pad, title_h + lines.size() * line_h + 2 * pad))
-	draw_rect(box, cmd.fill, true)
-	draw_rect(box, cmd.border, false, 1.0)
-	var y: float = cmd.pos.y + pad
-	if cmd.title != "":
-		draw_string(font, Vector2(cmd.pos.x + pad, y + 12), cmd.title, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, cmd.title_color)
-		y += title_h
-	for i: int in lines.size():
-		var c: Color = cmd.text_color
-		if i < colors.size() and colors[i] != null:
-			c = colors[i]
-		draw_string(font, Vector2(cmd.pos.x + pad, y + 12), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, c)
-		y += line_h
