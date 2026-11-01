@@ -114,6 +114,10 @@ func _ready() -> void:
 	# Preload every image on the main thread: the game thread only reads the
 	# GameImages cache afterwards (ResourceLoader is not called off-thread).
 	GameImages.load_resources(self)
+	# Same for scripts: GDScript compilation is not reliable off the main
+	# thread, so force every game script into the ResourceLoader cache here
+	# before the game thread starts touching them.
+	_preload_scripts("res://src")
 	_init_view()
 	# Audio: created on the main thread; the game thread only queues ops that
 	# pump() applies here once per frame.
@@ -125,6 +129,24 @@ func _ready() -> void:
 	ui_repaint()
 	_game_thread = Thread.new()
 	_game_thread.start(_game.run)
+
+
+## Force-load every .gd under dir (recursively) so all GDScripts are compiled
+## and cached on the main thread before the game thread starts.
+func _preload_scripts(dir: String) -> void:
+	var d := DirAccess.open(dir)
+	if d == null:
+		return
+	d.list_dir_begin()
+	var name := d.get_next()
+	while name != "":
+		if d.current_is_dir():
+			if name != "." and name != "..":
+				_preload_scripts(dir.path_join(name))
+		elif name.ends_with(".gd"):
+			load(dir.path_join(name))
+		name = d.get_next()
+	d.list_dir_end()
 
 
 func _init_view() -> void:
@@ -735,3 +757,21 @@ func _quit_app() -> void:
 	if _game_thread != null and _game_thread.is_alive():
 		_game_thread.wait_to_finish()
 	get_tree().quit()
+
+
+func _exit_tree() -> void:
+	# Safety net: never let the game thread be destroyed while still running
+	# (the engine warns and leaks ObjectDB instances otherwise).
+	if _game != null:
+		_game.is_game_running = false
+	if _game_thread != null and _game_thread.is_alive():
+		# Nudge a possibly blocked ui_wait_key() so the thread can observe
+		# is_game_running and exit its loop.
+		var k := InputEventKey.new()
+		k.keycode = KEY_ENTER
+		k.pressed = true
+		ui_post_key(k)
+		_game_thread.wait_to_finish()
+	# Drop game references so RefCounted objects are freed before shutdown.
+	_game = null
+	Session.the_session = null

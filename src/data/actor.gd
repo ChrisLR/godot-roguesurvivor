@@ -70,7 +70,10 @@ var odor_suppressor_counter: int = 0
 ## Gets or sets model. Setting model reset inventory and all stats to the model default values.
 var model: ActorModel:
 	get:
-		return Models.actors.get_model(model_id)
+		var db: ActorModelDB = Models.actors
+		if db == null:
+			return null
+		return db.get_model(model_id)
 	set(value):
 		model_id = value.id
 		_on_model_set()

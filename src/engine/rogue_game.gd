@@ -674,7 +674,8 @@ func spend_actor_stamina_points(actor: Actor, stamina_cost: int) -> void:
 
 
 func regen_actor_stamina_points(actor: Actor, stamina_regen: int) -> void:
-	if actor.model.abilities.can_tire:
+	var ab: Abilities = actor.model.abilities if actor.model != null else Abilities.NONE
+	if ab.can_tire:
 		actor.stamina_points = mini(rules.actor_max_sta(actor), actor.stamina_points + stamina_regen)
 	else:
 		actor.stamina_points = Rules.STAMINA_INFINITE

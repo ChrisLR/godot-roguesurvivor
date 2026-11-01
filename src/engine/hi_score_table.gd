@@ -155,7 +155,7 @@ static func load_table(filepath: String):
 
 	var file = FileAccess.open(filepath, FileAccess.READ)
 	if file == null:
-		push_warning("failed to load hiscore table (no hiscores?): %s (%s)" % [filepath, FileAccess.get_open_error()])
+		# No hiscore file yet (first run): not an error, start with an empty table.
 		return null
 
 	var data = file.get_var()

@@ -118,7 +118,7 @@ func get_action(p_game: RogueGame) -> ActorAction:
 	#########################
 
 	# 2. Update sensors.
-	var percepts: Array = update_sensors(p_game)
+	var percepts: Array[Percept] = update_sensors(p_game)
 
 	# 3. Issue action.
 	if _prev_location == null or _prev_location.map == null:
@@ -134,20 +134,20 @@ func get_action(p_game: RogueGame) -> ActorAction:
 
 # Strategy followed in GetAction
 
-## Abstract. C# CreateSensors().
+## Abstract. C# CreateSensors(). Concrete controllers override this.
 func create_sensors() -> void:
-	assert(false, "abstract method")
+	pass
 
 
-## Abstract. C# UpdateSensors(game).
-func update_sensors(p_game: RogueGame) -> Variant:
-	assert(false, "abstract method")
-	return null
+## Abstract. C# UpdateSensors(game). Base fallback: no percepts, so the
+## actor simply waits (see get_action).
+func update_sensors(p_game: RogueGame) -> Array[Percept]:
+	return []
 
 
-## Abstract. C# SelectAction(game, percepts).
+## Abstract. C# SelectAction(game, percepts). Base fallback: null, which
+## get_action turns into an ActionWait.
 func select_action(p_game: RogueGame, percepts: Array[Percept]) -> ActorAction:
-	assert(false, "abstract method")
 	return null
 
 

@@ -15,8 +15,8 @@ func _init(p_actor: Actor, p_game: RogueGame, p_direction: Direction) -> void:
 	new_location = actor.location.plus(direction)
 
 	var r: Dictionary = game.rules.is_bumpable_for(actor, game, new_location)
-	fail_reason = r.fail_reason
-	concrete_action = r.action
+	fail_reason = r.get("fail_reason", "") if r != null else ""
+	concrete_action = r.get("action") if r != null else null
 
 
 func is_legal() -> bool:

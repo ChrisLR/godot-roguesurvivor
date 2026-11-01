@@ -1501,10 +1501,14 @@ func is_on_couch(actor: Actor) -> bool:
 
 
 func is_actor_disturbed(a: Actor) -> bool:
+	if a.model == null:
+		return false
 	return a.model.abilities.has_sanity && a.sanity <= actor_disturbed_level(a)
 
 
 func is_actor_insane(a: Actor) -> bool:
+	if a.model == null:
+		return false
 	return a.model.abilities.has_sanity && a.sanity <= 0
 
 
