@@ -9,8 +9,8 @@ func _init(p_game, p_params: Dictionary = DEFAULT_PARAMS) -> void:
 	super(p_game, p_params)
 
 
-func generate(seed: int) -> Map:
-	var map := super.generate(seed)
+func generate(_seed: int) -> Map:
+	var map := super.generate(_seed)
 	map.name = "Std City"
 
 	###################################
@@ -46,8 +46,8 @@ func generate(seed: int) -> Map:
 	return map
 
 
-func generate_sewers_map(seed: int, district: District) -> Map:
-	var sewers := super.generate_sewers_map(seed, district)
+func generate_sewers_map(_seed: int, district: District) -> Map:
+	var sewers := super.generate_sewers_map(_seed, district)
 
 	###############################
 	# People and undeads in sewers
@@ -63,8 +63,8 @@ func generate_sewers_map(seed: int, district: District) -> Map:
 	return sewers
 
 
-func generate_subway_map(seed: int, district: District) -> Map:
-	var subway := super.generate_subway_map(seed, district)
+func generate_subway_map(_seed: int, district: District) -> Map:
+	var subway := super.generate_subway_map(_seed, district)
 
 	# DISABLED in the C# original (#if false) :
 	# People and undeads in subways, in rails zone.

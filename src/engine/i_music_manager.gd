@@ -35,28 +35,28 @@ var has_ended: bool:
 
 
 # Loading music
-func load_music(musicname: String, filename: String) -> bool:
+func load_music(_musicname: String, _filename: String) -> bool:
 	assert(false, "abstract method")
 	return false
 
 
-func load_sfx(sfxname: String, filename: String) -> bool:
+func load_sfx(_sfxname: String, _filename: String) -> bool:
 	assert(false, "abstract method")
 	return false
 
 
-func unload(musicname: String) -> void:
+func unload(_musicname: String) -> void:
 	assert(false, "abstract method")
 
 
 # Playing music
 ## Restart playing a music from the beginning if music is enabled.
-func play(musicname: String, pri: int) -> void:
+func play(_musicname: String, _pri: int) -> void:
 	assert(false, "abstract method")
 
 
 ## Restart playing in a loop a music from the beginning if music is enabled.
-func play_looping(musicname: String, pri: int) -> void:
+func play_looping(_musicname: String, _pri: int) -> void:
 	assert(false, "abstract method")
 
 

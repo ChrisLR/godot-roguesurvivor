@@ -30,6 +30,7 @@ enum Lighting {
 const GROUND_INVENTORY_SLOTS = 10
 
 # Primary data : serialize (Godot-native save format).
+@warning_ignore("shadowed_global_identifier")
 var seed: int
 var district: District = null
 var name: String
@@ -182,11 +183,13 @@ func is_on_map_border(x: int, y: int) -> bool:
 # Tiles
 
 func get_tile_at(x: int, y: int) -> Tile:
+	if not is_in_bounds(x, y):
+		return null
 	return tiles[x][y]
 
 
 func get_tile_at_p(p: Vector2i) -> Tile:
-	return tiles[p.x][p.y]
+	return get_tile_at(p.x, p.y)
 
 
 func set_tile_model_at(x: int, y: int, model: TileModel) -> void:
@@ -516,10 +519,13 @@ func remove_corpse(c: Corpse) -> void:
 
 
 func try_remove_corpse_of(a: Actor) -> bool:
-	for c: Corpse in corpses_list:
-		if c.dead_guy == a:
-			remove_corpse(c)
+	var i: int = 0
+	while i < corpses_list.size():
+		if corpses_list[i].dead_guy == a:
+			remove_corpse(corpses_list[i])
 			return true
+		else:
+			i += 1
 	return false
 
 
@@ -937,7 +943,7 @@ func serialize() -> Dictionary:
 		"name": name,
 		"bg_music": bg_music,
 		"lighting": lighting,
-		"local_time": local_time.serialize() if local_time != null else null,
+		"local_time": (local_time.serialize() as Variant) if local_time != null else null,
 		"width": width,
 		"height": height,
 		"tiles": tile_data,

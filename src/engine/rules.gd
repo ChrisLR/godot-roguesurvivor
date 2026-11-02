@@ -346,9 +346,9 @@ var dice_roller: DiceRoller:
 
 # Init
 
-func _init(dice_roller: DiceRoller) -> void:
-	assert(dice_roller != null, "diceRoller")
-	_dice_roller = dice_roller
+func _init(__dice_roller: DiceRoller) -> void:
+	assert(__dice_roller != null, "diceRoller")
+	_dice_roller = __dice_roller
 
 
 # Rolling & Random choices
@@ -403,7 +403,9 @@ func roll_damage(damage_value: int) -> int:
 
 
 func roll_neighbour_in_map(from: Location) -> Location:
-	while true:
+	# Cap iterations: on a 1x1 map (or degenerate case) the loop would spin forever.
+	var max_tries: int = 100
+	for _try in max_tries:
 		var next: Location = from.plus(roll_direction())
 
 		if next.map != from.map:
@@ -411,7 +413,7 @@ func roll_neighbour_in_map(from: Location) -> Location:
 
 		if from.map.is_in_bounds(next.position.x, next.position.y):
 			return next
-	return null
+	return from
 
 
 ## C# out param nextLocation -> returns {"ok": bool, "location": Location}.
@@ -944,7 +946,7 @@ func is_bumpable_for_at(actor: Actor, game, location: Location) -> Dictionary:
 # Switching Map Objects
 
 ## C# IsSwitchableFor(actor, powGen, out reason) -> Dictionary.
-func is_switchable_for(actor: Actor, pow_gen: PowerGenerator) -> Dictionary:
+func is_switchable_for(actor: Actor, _pow_gen: PowerGenerator) -> Dictionary:
 	# 1. Actor has ability.
 	if not actor.model.abilities.can_use_map_objects:
 		return {"ok": false, "fail_reason": "cannot use map objects"}
@@ -1262,7 +1264,7 @@ func can_pull_actor(actor: Actor, other: Actor, move_to_pos: Vector2i) -> Dictio
 
 
 ## C# CanActorShove(actor, other, out reason) -> Dictionary.
-func can_actor_shove(actor: Actor, other: Actor) -> Dictionary:
+func can_actor_shove(actor: Actor, _other: Actor) -> Dictionary:
 	# 1. Actor cannot push/pull.
 	if not has_actor_push_ability(actor):
 		return {"ok": false, "fail_reason": "cannot shove people"}
@@ -1648,7 +1650,7 @@ func can_actor_build_fortification(actor: Actor, pos: Vector2i, is_large: bool) 
 
 
 ## C# CanActorRepairFortification(actor, fort, out reason) -> Dictionary.
-func can_actor_repair_fortification(actor: Actor, fort: Fortification) -> Dictionary:
+func can_actor_repair_fortification(actor: Actor, _fort: Fortification) -> Dictionary:
 	# 1. Cannot use map objects.
 	if not actor.model.abilities.can_use_map_objects:
 		return {"ok": false, "fail_reason": "cannot use map objects"}
@@ -1675,7 +1677,7 @@ func actor_damage_vs_corpses(a: Actor) -> int:
 
 
 ## C# CanActorEatCorpse(actor, corpse, out reason) -> Dictionary.
-func can_actor_eat_corpse(actor: Actor, corpse: Corpse) -> Dictionary:
+func can_actor_eat_corpse(actor: Actor, _corpse: Corpse) -> Dictionary:
 	# 1. Actor is not undead or a starving living.
 	if not actor.model.abilities.is_undead:
 		if not is_actor_starving(actor) && not is_actor_insane(actor):
@@ -1790,14 +1792,18 @@ func los_distance(from: Vector2i, to: Vector2i) -> float:
 
 # Actor turn ordering
 
-func get_next_actor_to_act(map: Map, turn_counter: int) -> Actor:
+func get_next_actor_to_act(map: Map, _turn_counter: int) -> Actor:
 	if map == null:
 		return null
 
 	var n := map.count_actors
+	# Clamp the rotating index: if actors were removed without a reset,
+	# check_next_actor_index could be >= n, silently skipping all actors.
+	if map.check_next_actor_index < 0 or map.check_next_actor_index >= n:
+		map.check_next_actor_index = 0
 	for i in range(map.check_next_actor_index, n):
 		var a: Actor = map.get_actor(i)
-		if a.action_points > 0 && not a.is_sleeping:
+		if a.action_points > 0 && not a.is_sleeping && not a.is_dead:
 			map.check_next_actor_index = i
 			return a
 
@@ -1831,6 +1837,10 @@ func can_actor_act_next_turn(actor: Actor) -> bool:
 
 ## If actor spend a turn now, will actor get the chance to act before other?
 func will_actor_act_again_before(actor: Actor, other: Actor) -> bool:
+	# guard: actor may have no valid map (removed mid-transition).
+	if actor == null or actor.location == null or actor.location.map == null:
+		return false
+
 	# if other can still act, nope.
 	if other.action_points > 0:
 		return false
@@ -1844,6 +1854,8 @@ func will_actor_act_again_before(actor: Actor, other: Actor) -> bool:
 
 
 func will_other_act_twice_before(actor: Actor, other: Actor) -> bool:
+	if actor == null or actor.location == null or actor.location.map == null:
+		return false
 	if is_actor_before_in_map_list(actor.location.map, actor, other):
 		if other.action_points > BASE_ACTION_COST:
 			return true
@@ -2051,8 +2063,8 @@ func actor_max_sleep(actor: Actor) -> int:
 	return actor.sheet.base_sleep_points + skill_bonus
 
 
-func actor_sleep_regen(actor: Actor, is_on_couch: bool) -> int:
-	var base_regen := SLEEP_COUCH_SLEEPING_REGEN if is_on_couch else SLEEP_NOCOUCH_SLEEPING_REGEN
+func actor_sleep_regen(actor: Actor, _is_on_couch: bool) -> int:
+	var base_regen := SLEEP_COUCH_SLEEPING_REGEN if _is_on_couch else SLEEP_NOCOUCH_SLEEPING_REGEN
 	var skill_bonus := int(base_regen * SKILL_AWAKE_SLEEP_REGEN_BONUS * actor.sheet.skill_table.get_skill_level(Skills.IDs.AWAKE))
 
 	return base_regen + skill_bonus
@@ -2590,7 +2602,7 @@ func corpse_rot_level(c: Corpse) -> int:
 
 
 ## C# static CorpseDecayPerTurn(corpse).
-static func corpse_decay_per_turn(c: Corpse) -> float:
+static func corpse_decay_per_turn(_c: Corpse) -> float:
 	return CORPSE_DECAY_PER_TURN
 
 
@@ -2637,7 +2649,7 @@ func corpse_revive_chance(actor: Actor, corpse: Corpse) -> int:
 	return base_chance + skill_bonus
 
 
-func corpse_revive_hps(actor: Actor, corpse: Corpse) -> int:
+func corpse_revive_hps(actor: Actor, _corpse: Corpse) -> int:
 	var base_hps := 5
 	var skill_bonus := actor.sheet.skill_table.get_skill_level(Skills.IDs.MEDIC)
 	return base_hps + skill_bonus
@@ -2687,7 +2699,7 @@ func check_trap_step_on_breaks(trap: ItemTrap, mobj: MapObject = null) -> bool:
 	return roll_chance(chance)
 
 
-func check_trap_escape_breaks(trap: ItemTrap, a: Actor) -> bool:
+func check_trap_escape_breaks(trap: ItemTrap, _a: Actor) -> bool:
 	return roll_chance(trap.trap_model().break_chance_when_escape)
 
 
@@ -2731,7 +2743,7 @@ func is_trap_triggering_map_object_there(map: Map, pos: Vector2i) -> bool:
 
 # Grabbing
 
-func zgrab_chance(grabber: Actor, victim: Actor) -> int:
+func zgrab_chance(grabber: Actor, _victim: Actor) -> int:
 	var zgrab_level := grabber.sheet.skill_table.get_skill_level(Skills.IDs.Z_GRAB)
 	return zgrab_level * SKILL_ZGRAB_CHANCE
 

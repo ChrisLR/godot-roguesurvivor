@@ -18,9 +18,9 @@ var _master_smell_sensor: SmellSensor = null
 # BaseAI
 
 func create_sensors() -> void:
-	_los_sensor = MemorizedSensor.new(
+	_los_sensor = _track_memorized_sensor(MemorizedSensor.new(
 		LOSSensor.new(LOSSensor.SensingFilter.ACTORS),
-		LOS_MEMORY)
+		LOS_MEMORY))
 	_living_smell_sensor = SmellSensor.new(Odor.LIVING)
 	_master_smell_sensor = SmellSensor.new(Odor.UNDEAD_MASTER)
 
@@ -33,7 +33,9 @@ func update_sensors(game: RogueGame) -> Array[Percept]:
 
 
 func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
-	var fov = (_los_sensor.sensor as LOSSensor).fov
+	if not has_valid_location():
+		return null
+	var _fov = (_los_sensor.sensor as LOSSensor).fov
 	var map_percepts = filter_same_map(game, percepts)
 
 	##############################################################

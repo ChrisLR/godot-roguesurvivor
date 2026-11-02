@@ -27,7 +27,7 @@ class Achievement:
 	enum IDs {
 		_FIRST = 0,
 
-		REACHED_DAY_07,
+		REACHED_DAY_07 = _FIRST,
 		REACHED_DAY_14,
 		REACHED_DAY_21,
 		REACHED_DAY_28,
@@ -332,7 +332,7 @@ func _init_achievement(id: int, a: Achievement) -> void:
 ## - side : side the difficulty is computed for.
 ## - reincarnation_number : 0 for the first life.
 ## Returns [0..1+].
-static func compute_difficulty_rating(options: GameOptions, side: int, reincarnation_number: int) -> float:
+static func compute_difficulty_rating(options: GameOptions, __side: int, __reincarnation_number: int) -> float:
 	var rating := 1.0
 
 	###########
@@ -352,7 +352,7 @@ static func compute_difficulty_rating(options: GameOptions, side: int, reincarna
 
 	# - Disable NPC starvation: -10%
 	if not options.npc_can_starve_to_death:
-		if side == DifficultySide.FOR_SURVIVOR:
+		if __side == DifficultySide.FOR_SURVIVOR:
 			rating -= 0.10
 		else:
 			rating += 0.10
@@ -360,7 +360,7 @@ static func compute_difficulty_rating(options: GameOptions, side: int, reincarna
 	# - Nat Guards                : -50% -> +50%
 	if options.nat_guard_factor != GameOptions.DEFAULT_NATGUARD_FACTOR:
 		var k := float(options.nat_guard_factor - GameOptions.DEFAULT_NATGUARD_FACTOR) / float(GameOptions.DEFAULT_NATGUARD_FACTOR)
-		if side == DifficultySide.FOR_SURVIVOR:
+		if __side == DifficultySide.FOR_SURVIVOR:
 			rating -= 0.50 * k
 		else:
 			rating += 0.50 * k
@@ -368,7 +368,7 @@ static func compute_difficulty_rating(options: GameOptions, side: int, reincarna
 	# - Supplies                  : -50% -> +50%
 	if options.supplies_drop_factor != GameOptions.DEFAULT_SUPPLIESDROP_FACTOR:
 		var k := float(options.supplies_drop_factor - GameOptions.DEFAULT_SUPPLIESDROP_FACTOR) / float(GameOptions.DEFAULT_SUPPLIESDROP_FACTOR)
-		if side == DifficultySide.FOR_SURVIVOR:
+		if __side == DifficultySide.FOR_SURVIVOR:
 			rating -= 0.50 * k
 		else:
 			rating += 0.50 * k
@@ -385,7 +385,7 @@ static func compute_difficulty_rating(options: GameOptions, side: int, reincarna
 			GameOptions.ZupDays.FIVE: k -= 0.20
 			GameOptions.ZupDays.SIX: k -= 0.30
 			GameOptions.ZupDays.SEVEN: k -= 0.40
-		if side == DifficultySide.FOR_SURVIVOR:
+		if __side == DifficultySide.FOR_SURVIVOR:
 			rating += k
 		else:
 			rating -= k
@@ -399,20 +399,23 @@ static func compute_difficulty_rating(options: GameOptions, side: int, reincarna
 	###########
 	# - Density            : f(mapsize, civs+undeads), +/- 99%   // alpha10.1 removed citysize from difficulty formula
 	var k_default_density := sqrt(GameOptions.DEFAULT_MAX_CIVILIANS + GameOptions.DEFAULT_MAX_UNDEADS) / float(GameOptions.DEFAULT_DISTRICT_SIZE * GameOptions.DEFAULT_DISTRICT_SIZE)
-	var k_density := sqrt(options.max_civilians + options.max_undeads) / float(options.district_size * options.district_size)
+	# Guard user-configurable options against zero denominators.
+	var district_size := options.district_size if options.district_size > 0 else GameOptions.DEFAULT_DISTRICT_SIZE
+	var k_density := sqrt(options.max_civilians + options.max_undeads) / float(district_size * district_size)
 	var r_density := (k_density - k_default_density) / k_default_density
-	if side == DifficultySide.FOR_SURVIVOR:
+	if __side == DifficultySide.FOR_SURVIVOR:
 		rating += 0.99 * r_density
 	else:
 		rating -= 0.99 * r_density
 
 	# - Undeads            : f(undeads/civs, day0, invasion%), +/- 50%
 	var k_default_undeads_ratio := float(GameOptions.DEFAULT_MAX_UNDEADS) / float(GameOptions.DEFAULT_MAX_CIVILIANS)
-	var k_undeads_ratio := float(options.max_undeads) / float(options.max_civilians)
+	var max_civilians := options.max_civilians if options.max_civilians > 0 else GameOptions.DEFAULT_MAX_CIVILIANS
+	var k_undeads_ratio := float(options.max_undeads) / float(max_civilians)
 	var k_undeads_nb := (k_undeads_ratio - k_default_undeads_ratio) / k_default_undeads_ratio
 	var k_undeads_day0 := float(options.day_zero_undeads_percent - GameOptions.DEFAULT_DAY_ZERO_UNDEADS_PERCENT) / float(GameOptions.DEFAULT_DAY_ZERO_UNDEADS_PERCENT)
 	var k_undeads_inv := float(options.zombie_invasion_daily_increase - GameOptions.DEFAULT_ZOMBIE_INVASION_DAILY_INCREASE) / float(GameOptions.DEFAULT_ZOMBIE_INVASION_DAILY_INCREASE)
-	if side == DifficultySide.FOR_SURVIVOR:
+	if __side == DifficultySide.FOR_SURVIVOR:
 		rating += 0.30 * k_undeads_nb + 0.05 * k_undeads_day0 + 0.15 * k_undeads_inv
 	else:
 		rating -= 0.30 * k_undeads_nb + 0.05 * k_undeads_day0 + 0.15 * k_undeads_inv
@@ -425,7 +428,7 @@ static func compute_difficulty_rating(options: GameOptions, side: int, reincarna
 	var k_civ_starvation := float(options.max_civilians * options.starved_zombification_chance - k_default_civ_starvation) / k_default_civ_starvation
 	if not options.npc_can_starve_to_death:
 		k_civ_starvation = -1.0
-	if side == DifficultySide.FOR_SURVIVOR:
+	if __side == DifficultySide.FOR_SURVIVOR:
 		rating += 0.30 * k_civ_zombification + 0.20 * k_civ_starvation
 	else:
 		rating -= 0.30 * k_civ_zombification + 0.20 * k_civ_starvation
@@ -443,7 +446,7 @@ static func compute_difficulty_rating(options: GameOptions, side: int, reincarna
 	###########
 	# - Disable undeads evolution: x0.5 / x2
 	if not options.allow_undeads_evolution:
-		if side == DifficultySide.FOR_SURVIVOR:
+		if __side == DifficultySide.FOR_SURVIVOR:
 			rating *= 0.5
 		else:
 			rating *= 2.0
@@ -458,25 +461,25 @@ static func compute_difficulty_rating(options: GameOptions, side: int, reincarna
 
 	# - Aggressive Hungry Civs     : x0.5 / x2
 	if not options.is_aggressive_hungry_civilians_on:
-		if side == DifficultySide.FOR_SURVIVOR:
+		if __side == DifficultySide.FOR_SURVIVOR:
 			rating *= 0.5
 		else:
 			rating *= 2.0
 	# - Rats Upgrade
 	if options.rats_upgrade:
-		if side == DifficultySide.FOR_SURVIVOR:
+		if __side == DifficultySide.FOR_SURVIVOR:
 			rating *= 1.10
 		else:
 			rating *= 0.90
 	# - Skeletons Upgrade
 	if options.skeletons_upgrade:
-		if side == DifficultySide.FOR_SURVIVOR:
+		if __side == DifficultySide.FOR_SURVIVOR:
 			rating *= 1.20
 		else:
 			rating *= 0.80
 	# - Shamblers Upgrade
 	if options.shamblers_upgrade:
-		if side == DifficultySide.FOR_SURVIVOR:
+		if __side == DifficultySide.FOR_SURVIVOR:
 			rating *= 1.25
 		else:
 			rating *= 0.75
@@ -484,7 +487,7 @@ static func compute_difficulty_rating(options: GameOptions, side: int, reincarna
 	###########
 	# Divide by reincarnation.
 	###########
-	rating /= 1.0 + reincarnation_number
+	rating /= 1.0 + __reincarnation_number
 
 	# done.
 	return max(rating, 0.0)
@@ -626,8 +629,8 @@ func serialize() -> Dictionary:
 	data["difficulty_rating"] = _difficulty_rating
 	data["side"] = _side
 
-	data["killer"] = Session.actor_ref(killer) if killer != null else null
-	data["zombified_player"] = Session.actor_ref(zombified_player) if zombified_player != null else null
+	data["killer"] = (Session.actor_ref(killer) as Variant) if killer != null else null
+	data["zombified_player"] = (Session.actor_ref(zombified_player) as Variant) if zombified_player != null else null
 	if followers_when_died != null:
 		var followers_data: Array = []
 		for fo: Actor in followers_when_died:

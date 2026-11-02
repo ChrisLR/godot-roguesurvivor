@@ -35,7 +35,6 @@ static var INSANITIES: Array[String] = [
 	"ROLLING LIKE AN EGG!",
 	"THAT IS NOT DECENT!",
 	"JUMP LIKE A FLOWER!",
-	"NIGGER TRIGGER!",
 	"CHEESE LIKE THESE...",
 	"ILL-ADVISED LOBSTER!",
 	"SSSHHHH! SILENCE... DO YOU SMELL?",
@@ -85,7 +84,9 @@ func update_sensors(game: RogueGame) -> Array[Percept]:
 
 
 func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
-	var fov = _los_sensor.fov
+	if not has_valid_location():
+		return null
+	var _fov = _los_sensor.fov
 	var map_percepts = filter_same_map(game, percepts)
 
 	#####################################################################

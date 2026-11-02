@@ -17,6 +17,12 @@ var world_position: Vector2i
 var kind: DistrictKind
 var name: String = ""
 var maps: Array[Map] = []
+## INVARIANT: entry_map / sewers_map / subway_map are always also present in
+## the maps list (the setter calls add_map). During deserialization the maps
+## list is populated first via add_map(), then the setters are assigned —
+## add_map() dedupes so the double-add is a no-op. Never assign these without
+## going through the setter; never remove from maps directly without
+## clearing the corresponding property.
 var entry_map: Map = null:
 	set(value):
 		if entry_map != null:

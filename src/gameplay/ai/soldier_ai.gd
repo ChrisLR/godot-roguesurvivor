@@ -37,12 +37,12 @@ var _exploration: ExplorationData = null
 func take_control(actor: Actor) -> void:
 	super(actor)
 
-	_exploration = ExplorationData.new(EXPLORATION_LOCATIONS, EXPLORATION_ZONES)
+	_exploration = _track_exploration(ExplorationData.new(EXPLORATION_LOCATIONS, EXPLORATION_ZONES))
 
 
 func create_sensors() -> void:
 	_los_sensor = LOSSensor.new(LOSSensor.SensingFilter.ACTORS | LOSSensor.SensingFilter.ITEMS)
-	_mem_los_sensor = MemorizedSensor.new(_los_sensor, LOS_MEMORY)
+	_mem_los_sensor = _track_memorized_sensor(MemorizedSensor.new(_los_sensor, LOS_MEMORY))
 
 
 func update_sensors(game: RogueGame) -> Array[Percept]:
@@ -50,6 +50,8 @@ func update_sensors(game: RogueGame) -> Array[Percept]:
 
 
 func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
+	if not has_valid_location():
+		return null
 	var map_percepts = filter_same_map(game, percepts)
 
 	# alpha10

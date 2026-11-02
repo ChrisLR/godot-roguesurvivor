@@ -72,3 +72,47 @@ func sense(game: RogueGame, actor: Actor) -> Array[Percept]:
 
 	# Return updated percepts.
 	return _percepts
+
+
+# --- save system ---
+
+## Serialize the memorized percepts. Actor/Corpse percepts become world-graph
+## refs, String percepts (raid descriptions) are stored raw; anything else is
+## dropped (not restorable).
+func serialize() -> Dictionary:
+	var list := []
+	for p: Percept in _percepts:
+		var entry := {"turn": p.turn, "location": Location.serialize(p.location)}
+		if p.percepted is Actor:
+			entry["kind"] = "actor"
+			entry["ref"] = Session.actor_ref(p.percepted)
+		elif p.percepted is Corpse:
+			entry["kind"] = "corpse"
+			entry["ref"] = Session.corpse_ref(p.percepted)
+		elif p.percepted is String:
+			entry["kind"] = "string"
+			entry["text"] = p.percepted
+		else:
+			continue
+		list.append(entry)
+	return {"persistance": _persistance, "percepts": list}
+
+
+## Restore memorized percepts from serialize() data (world needed to resolve
+## actor/corpse refs).
+func deserialize(world: World, data: Dictionary) -> void:
+	_percepts.clear()
+	if data == null:
+		return
+	_persistance = data.get("persistance", _persistance)
+	for entry in data.get("percepts", []):
+		var percepted: Variant = null
+		match entry.get("kind", ""):
+			"actor", "corpse":
+				percepted = Session.resolve_ref(world, entry.get("ref"))
+			"string":
+				percepted = entry.get("text", "")
+		if percepted == null:
+			continue
+		var loc := Location.deserialize_data(world, entry.get("location", {}))
+		_percepts.append(Percept.new(percepted, entry.get("turn", 0), loc))

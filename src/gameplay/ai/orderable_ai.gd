@@ -25,27 +25,27 @@ func set_order(new_order) -> void:
 	_report_stage = 0
 
 
-func execute_order(game: RogueGame, order: ActorOrder, percepts, exploration: ExplorationData) -> ActorAction:
+func execute_order(game: RogueGame, _order: ActorOrder, percepts, exploration: ExplorationData) -> ActorAction:
 	# cancel if leader is dead!
 	if _actor.leader == null || _actor.leader.is_dead:
 		return null
 
 	# execute task.
-	match order.task:
+	match _order.task:
 		ActorOrder.ActorTasks.BARRICADE_ONE:
-			return execute_barricading(game, order.location, false)
+			return execute_barricading(game, _order.location, false)
 		ActorOrder.ActorTasks.BARRICADE_MAX:
-			return execute_barricading(game, order.location, true)
+			return execute_barricading(game, _order.location, true)
 		ActorOrder.ActorTasks.BUILD_SMALL_FORTIFICATION:
-			return execute_build_fortification(game, order.location, false)
+			return execute_build_fortification(game, _order.location, false)
 		ActorOrder.ActorTasks.BUILD_LARGE_FORTIFICATION:
-			return execute_build_fortification(game, order.location, true)
+			return execute_build_fortification(game, _order.location, true)
 		ActorOrder.ActorTasks.DROP_ALL_ITEMS:
 			return execute_drop_all_items(game)
 		ActorOrder.ActorTasks.GUARD:
-			return execute_guard(game, order.location, percepts)
+			return execute_guard(game, _order.location, percepts)
 		ActorOrder.ActorTasks.PATROL:
-			return execute_patrol(game, order.location, percepts, exploration)
+			return execute_patrol(game, _order.location, percepts, exploration)
 		ActorOrder.ActorTasks.REPORT_EVENTS:
 			return execute_report(game, percepts)
 		ActorOrder.ActorTasks.SLEEP_NOW:

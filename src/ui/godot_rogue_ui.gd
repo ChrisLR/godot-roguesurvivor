@@ -30,7 +30,6 @@ const TILE := 32
 # thread accumulates into _batch (ui_clear resets it), and ui_repaint()
 # publishes the whole batch atomically. _process() then applies the batch
 # to the node tree on the main thread.
-var _commands: Array[Dictionary] = []
 var _pending_commands: Array[Dictionary] = []
 var _batch: Array[Dictionary] = []
 var _cmd_mutex := Mutex.new()
@@ -42,7 +41,7 @@ var _redraw_requested := false
 var _key_queue: Array[InputEventKey] = []
 var _key_mutex := Mutex.new()
 var _key_sem := Semaphore.new()
-var _posted_key: InputEventKey = null
+var _mouse_mutex := Mutex.new()
 var _mouse_position := Vector2i.ZERO
 var _mouse_buttons := 0
 
@@ -138,14 +137,14 @@ func _preload_scripts(dir: String) -> void:
 	if d == null:
 		return
 	d.list_dir_begin()
-	var name := d.get_next()
-	while name != "":
+	var _name := d.get_next()
+	while _name != "":
 		if d.current_is_dir():
-			if name != "." and name != "..":
-				_preload_scripts(dir.path_join(name))
-		elif name.ends_with(".gd"):
-			load(dir.path_join(name))
-		name = d.get_next()
+			if _name != "." and _name != "..":
+				_preload_scripts(dir.path_join(_name))
+		elif _name.ends_with(".gd"):
+			load(dir.path_join(_name))
+		_name = d.get_next()
 	d.list_dir_end()
 
 
@@ -323,9 +322,6 @@ func _apply_batch(batch: Array) -> void:
 		return
 	if batch[0].op == "clear":
 		_reset_view()
-		_commands = batch
-	else:
-		_commands.append_array(batch)
 	for cmd: Dictionary in batch:
 		_apply_command(cmd)
 
@@ -414,14 +410,14 @@ func _sprite_kind(id: String) -> String:
 	return "effects"
 
 
-func _apply_sprite(id: String, gx: int, gy: int, mod: Color, gray: bool, rot: float = 0.0, scale: float = 1.0, world: bool = true) -> void:
+func _apply_sprite(id: String, gx: int, gy: int, mod: Color, gray: bool, rot: float = 0.0, _scale: float = 1.0, world: bool = true) -> void:
 	var kind := _sprite_kind(id) if world else "screenfx"
 	var node := _pool_next(kind)
 	var spr: Sprite2D = node if node is Sprite2D else node.get_child(0)
 	spr.texture = GameImages.get_gray_level(id) if gray else GameImages.get_image(id)
 	spr.modulate = mod
 	spr.rotation = rot
-	spr.scale = Vector2(scale, scale)
+	spr.scale = Vector2(_scale, _scale)
 	node.position = Vector2(gx, gy)
 
 
@@ -540,15 +536,23 @@ func ui_post_key(e: InputEventKey) -> void:
 
 
 func ui_get_mouse_position() -> Vector2i:
-	return _mouse_position
+	_mouse_mutex.lock()
+	var pos := _mouse_position
+	_mouse_mutex.unlock()
+	return pos
 
 
 func ui_peek_mouse_buttons() -> int:
-	return _mouse_buttons
+	_mouse_mutex.lock()
+	var btns := _mouse_buttons
+	_mouse_mutex.unlock()
+	return btns
 
 
 func ui_post_mouse_buttons(buttons: int) -> void:
+	_mouse_mutex.lock()
 	_mouse_buttons = buttons
+	_mouse_mutex.unlock()
 
 
 func ui_set_cursor(cursor: Resource) -> void:
@@ -564,16 +568,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		ui_post_key(event)
 	elif event is InputEventMouseMotion:
+		_mouse_mutex.lock()
 		_mouse_position = Vector2i((event as InputEventMouseMotion).position)
+		_mouse_mutex.unlock()
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		var mask := 0
-		if _mouse_buttons & 1:
-			mask |= 1
-		if _mouse_buttons & 2:
-			mask |= 2
-		if _mouse_buttons & 4:
-			mask |= 4
+		_mouse_mutex.lock()
+		var mask := _mouse_buttons
 		match mb.button_index:
 			MOUSE_BUTTON_LEFT:
 				mask = (mask & ~1) | (1 if mb.pressed else 0)
@@ -582,6 +583,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_MIDDLE:
 				mask = (mask & ~4) | (4 if mb.pressed else 0)
 		_mouse_buttons = mask
+		_mouse_mutex.unlock()
 
 
 # ------------------------------------------------------------------ delay
@@ -630,7 +632,11 @@ func _push_command(cmd: Dictionary) -> void:
 
 
 func ui_clear(clear_color: Color) -> void:
+	# Take the mutex like ui_repaint does: keeps the write atomic w.r.t. any
+	# concurrent reader of _batch on the game thread.
+	_cmd_mutex.lock()
 	_batch = [{"op": "clear", "color": clear_color}]
+	_cmd_mutex.unlock()
 
 
 func ui_draw_image(image_id: String, gx: int, gy: int) -> void:
@@ -641,8 +647,8 @@ func ui_draw_image_tint(image_id: String, gx: int, gy: int, tint: Color) -> void
 	_push_command({"op": "image", "id": image_id, "pos": Vector2(gx, gy), "modulate": tint})
 
 
-func ui_draw_image_transform(image_id: String, gx: int, gy: int, rotation: float, scale: float) -> void:
-	_push_command({"op": "image_transform", "id": image_id, "pos": Vector2(gx, gy), "rot": rotation, "scale": scale, "modulate": Color.WHITE})
+func ui_draw_image_transform(image_id: String, gx: int, gy: int, _rotation: float, _scale: float) -> void:
+	_push_command({"op": "image_transform", "id": image_id, "pos": Vector2(gx, gy), "rot": _rotation, "scale": _scale, "modulate": Color.WHITE})
 
 
 func ui_draw_gray_level_image(image_id: String, gx: int, gy: int) -> void:
@@ -737,7 +743,13 @@ func ui_save_screenshot(file_path: String) -> String:
 
 
 func _save_screenshot_deferred(path: String) -> void:
-	var img := get_viewport().get_texture().get_image()
+	# headless runs have no viewport texture; nothing to save there
+	var tex := get_viewport().get_texture()
+	if tex == null:
+		return
+	var img := tex.get_image()
+	if img == null:
+		return
 	img.save_png(path)
 
 

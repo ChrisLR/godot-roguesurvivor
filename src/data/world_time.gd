@@ -73,9 +73,9 @@ var is_strike_of_midday: bool:
 		return _is_strike_of_midday
 
 
-func _init(turn_counter: int = 0) -> void:
-	assert(turn_counter >= 0, "turnCounter < 0")
-	_turn_counter = turn_counter
+func _init(__turn_counter: int = 0) -> void:
+	assert(__turn_counter >= 0, "turnCounter < 0")
+	_turn_counter = __turn_counter
 	_recompute_date()
 
 

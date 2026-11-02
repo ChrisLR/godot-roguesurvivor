@@ -52,7 +52,10 @@ static func coord_to_string(x: int, y: int) -> String:
 func optimize_before_saving() -> void:
 	for x in size:
 		for y in size:
-			districts_grid[x * size + y].optimize_before_saving()
+			# Guard: a partially-deserialized world may have null districts.
+			var d: District = districts_grid[x * size + y]
+			if d != null:
+				d.optimize_before_saving()
 
 
 # --- save system ---

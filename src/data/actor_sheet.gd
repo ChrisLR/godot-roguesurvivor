@@ -66,14 +66,14 @@ func _init(base_hit_points_or_copy: Variant, p_base_stamina_points: int = 0,
 # --- save system ---
 func serialize() -> Dictionary:
 	return {
-		"skill_table": skill_table.serialize() if skill_table != null else null,
+		"skill_table": (skill_table.serialize() as Variant) if skill_table != null else null,
 		"base_hit_points": base_hit_points,
 		"base_stamina_points": base_stamina_points,
 		"base_food_points": base_food_points,
 		"base_sleep_points": base_sleep_points,
 		"base_sanity": base_sanity,
-		"unarmed_attack": unarmed_attack.serialize() if unarmed_attack != null else null,
-		"base_defence": base_defence.serialize() if base_defence != null else null,
+		"unarmed_attack": (unarmed_attack.serialize() as Variant) if unarmed_attack != null else null,
+		"base_defence": (base_defence.serialize() as Variant) if base_defence != null else null,
 		"base_view_range": base_view_range,
 		"base_audio_range": base_audio_range,
 		"base_smell_rating": base_smell_rating,

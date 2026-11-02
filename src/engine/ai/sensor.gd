@@ -4,6 +4,6 @@ extends RefCounted
 ## Abstract base of sensors.
 
 ## Abstract. C# Sense(game, actor).
-func sense(game: RogueGame, actor: Actor) -> Array[Percept]:
+func sense(_game: RogueGame, _actor: Actor) -> Array[Percept]:
 	assert(false, "abstract method")
 	return []

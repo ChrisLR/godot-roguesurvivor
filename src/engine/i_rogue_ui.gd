@@ -22,7 +22,7 @@ func ui_peek_key() -> InputEventKey:
 	return null
 
 
-func ui_post_key(e: InputEventKey) -> void:
+func ui_post_key(_e: InputEventKey) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
@@ -37,16 +37,16 @@ func ui_peek_mouse_buttons() -> int:
 	return 0
 
 
-func ui_post_mouse_buttons(buttons: int) -> void:
+func ui_post_mouse_buttons(_buttons: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_set_cursor(cursor: Resource) -> void:
+func ui_set_cursor(_cursor: Resource) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
 # Delay
-func ui_wait(msecs: int) -> void:
+func ui_wait(_msecs: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
@@ -55,76 +55,76 @@ func ui_repaint() -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_clear(clear_color: Color) -> void:
+func ui_clear(_clear_color: Color) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_image(image_id: String, gx: int, gy: int) -> void:
+func ui_draw_image(_image_id: String, _gx: int, _gy: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_image_tint(image_id: String, gx: int, gy: int, tint: Color) -> void:
+func ui_draw_image_tint(_image_id: String, _gx: int, _gy: int, _tint: Color) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_image_transform(image_id: String, gx: int, gy: int, rotation: float, scale: float) -> void:
+func ui_draw_image_transform(_image_id: String, _gx: int, _gy: int, _rotation: float, _scale: float) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_gray_level_image(image_id: String, gx: int, gy: int) -> void:
+func ui_draw_gray_level_image(_image_id: String, _gx: int, _gy: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_transparent_image(alpha: float, image_id: String, gx: int, gy: int) -> void:
+func ui_draw_transparent_image(_alpha: float, _image_id: String, _gx: int, _gy: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_point(color: Color, gx: int, gy: int) -> void:
+func ui_draw_point(_color: Color, _gx: int, _gy: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_line(color: Color, gx_from: int, gy_from: int, gx_to: int, gy_to: int) -> void:
+func ui_draw_line(_color: Color, _gx_from: int, _gy_from: int, _gx_to: int, _gy_to: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_rect(color: Color, rect: Rect2i) -> void:
+func ui_draw_rect(_color: Color, _rect: Rect2i) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_fill_rect(color: Color, rect: Rect2i) -> void:
+func ui_fill_rect(_color: Color, _rect: Rect2i) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_string(color: Color, text: String, gx: int, gy: int, shadow_color: Color = Color.TRANSPARENT) -> void:
+func ui_draw_string(_color: Color, _text: String, _gx: int, _gy: int, _shadow_color: Color = Color.TRANSPARENT) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_string_bold(color: Color, text: String, gx: int, gy: int, shadow_color: Color = Color.TRANSPARENT) -> void:
+func ui_draw_string_bold(_color: Color, _text: String, _gx: int, _gy: int, _shadow_color: Color = Color.TRANSPARENT) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_popup(lines: PackedStringArray, text_color: Color, box_border_color: Color, box_fill_color: Color, gx: int, gy: int) -> void:
+func ui_draw_popup(_lines: PackedStringArray, _text_color: Color, _box_border_color: Color, _box_fill_color: Color, _gx: int, _gy: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_popup_title(title: String, title_color: Color, lines: PackedStringArray, text_color: Color, box_border_color: Color, box_fill_color: Color, gx: int, gy: int) -> void:
+func ui_draw_popup_title(_title: String, _title_color: Color, _lines: PackedStringArray, _text_color: Color, _box_border_color: Color, _box_fill_color: Color, _gx: int, _gy: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_popup_title_colors(title: String, title_color: Color, lines: PackedStringArray, colors: Array, box_border_color: Color, box_fill_color: Color, gx: int, gy: int) -> void:
+func ui_draw_popup_title_colors(_title: String, _title_color: Color, _lines: PackedStringArray, _colors: Array, _box_border_color: Color, _box_fill_color: Color, _gx: int, _gy: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
 # Minimap painting
-func ui_clear_minimap(color: Color) -> void:
+func ui_clear_minimap(_color: Color) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_set_minimap_color(x: int, y: int, color: Color) -> void:
+func ui_set_minimap_color(_x: int, _y: int, _color: Color) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
-func ui_draw_minimap(gx: int, gy: int) -> void:
+func ui_draw_minimap(_gx: int, _gy: int) -> void:
 	push_error(NOT_IMPLEMENTED)
 
 
@@ -141,7 +141,7 @@ func ui_get_canvas_scale_y() -> float:
 
 # Screenshots
 ## file path without the extension, eg: "user://screenshots/shot100"
-func ui_save_screenshot(file_path: String) -> String:
+func ui_save_screenshot(_file_path: String) -> String:
 	push_error(NOT_IMPLEMENTED)
 	return ""
 

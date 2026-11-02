@@ -42,9 +42,9 @@ var is_visited: bool:
 			flags &= ~Flags.IS_VISITED
 
 
-func _init(model: TileModel) -> void:
-	assert(model != null)
-	model_id = model.id
+func _init(_model: TileModel) -> void:
+	assert(_model != null)
+	model_id = _model.id
 
 
 var model: TileModel:
@@ -54,9 +54,9 @@ var model: TileModel:
 		set_model(value)
 
 
-func set_model(model: TileModel) -> void:
-	assert(model != null)
-	model_id = model.id
+func set_model(_model: TileModel) -> void:
+	assert(_model != null)
+	model_id = _model.id
 
 
 func has_decorations() -> bool:

@@ -17,6 +17,6 @@ func leave_control() -> void:
 
 
 ## Abstract. C# GetAction(game).
-func get_action(p_game: RogueGame) -> ActorAction:
+func get_action(_p_game: RogueGame) -> ActorAction:
 	assert(false, "abstract method")
 	return null

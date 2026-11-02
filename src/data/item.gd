@@ -12,8 +12,8 @@ var is_unique: bool = false
 var is_forbidden_to_ai: bool = false
 
 
-func _init(model: ItemModel) -> void:
-	model_id = model.id
+func _init(_model: ItemModel) -> void:
+	model_id = _model.id
 	quantity = 1
 	equipped_part = Doll.DollPart.NONE
 
@@ -82,19 +82,19 @@ func serialize() -> Dictionary:
 
 
 ## Overridden by subclasses to add their own fields.
-func _serialize_fields(d: Dictionary) -> void:
+func _serialize_fields(_d: Dictionary) -> void:
 	pass
 
 
 static func deserialize_data(data: Dictionary) -> Item:
 	var script: GDScript = load(data["class_path"])
-	var model: ItemModel = Models.items.get_model(data["model_id"])
+	var _model: ItemModel = Models.items.get_model(data["model_id"])
 	var it: Item
 	if data.has("primed_model_id"):
 		# ItemExplosive/ItemGrenade constructors take the primed model too.
-		it = script.new(model, Models.items.get_model(data["primed_model_id"]))
+		it = script.new(_model, Models.items.get_model(data["primed_model_id"]))
 	else:
-		it = script.new(model)
+		it = script.new(_model)
 	it._deserialize_fields(data)
 	return it
 

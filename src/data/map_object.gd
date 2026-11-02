@@ -228,7 +228,7 @@ func serialize() -> Dictionary:
 
 
 ## Overridden by subclasses to add their own fields.
-func _serialize_fields(d: Dictionary) -> void:
+func _serialize_fields(_d: Dictionary) -> void:
 	pass
 
 

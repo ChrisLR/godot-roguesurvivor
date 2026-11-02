@@ -91,7 +91,7 @@ func take_control(actor: Actor) -> void:
 	super(actor)
 
 	_safe_turns = 0
-	_exploration = ExplorationData.new(EXPLORATION_MAX_LOCATIONS, EXPLORATION_MAX_ZONES)
+	_exploration = _track_exploration(ExplorationData.new(EXPLORATION_MAX_LOCATIONS, EXPLORATION_MAX_ZONES))
 
 	_last_enemy_saw = null
 	_last_items_saw = null
@@ -131,6 +131,8 @@ func update_sensors(game: RogueGame) -> Array[Percept]:
 
 
 func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
+	if not has_valid_location():
+		return null
 	var map_percepts = filter_same_map(game, percepts)
 
 	#######################
@@ -203,7 +205,7 @@ func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
 	var check_our_leader: bool = _actor.has_leader and not dont_follow_leader
 	var see_leader: bool = check_our_leader && _los_sensor.fov.has(_actor.leader.location.position)
 	var is_leader_fighting: bool = check_our_leader && is_adjacent_to_enemy(game, _actor.leader)
-	var is_courageous: bool = check_our_leader && see_leader && is_leader_fighting && not game.rules.is_actor_tired(_actor)
+	var _is_courageous: bool = check_our_leader && see_leader && is_leader_fighting && not game.rules.is_actor_tired(_actor)
 
 	# safety counter.
 	if has_enemies:

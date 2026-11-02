@@ -1117,7 +1117,7 @@ func _find_line_for_model(table: CSVParser.CSVTable, model_id: int) -> CSVParser
 	return null
 
 
-func _get_data_from_csv_table(ui: IRogueUI, table: CSVParser.CSVTable, fn: Callable, model_id: int):
+func _get_data_from_csv_table(_ui: IRogueUI, table: CSVParser.CSVTable, fn: Callable, model_id: int):
 	# get line for model in table.
 	var line := _find_line_for_model(table, model_id)
 	if line == null:
@@ -1482,10 +1482,10 @@ class ExplosiveData:
 		d.max_throw = line.get_field(4).parse_int()
 		d.stacking_limit = line.get_field(5).parse_int()
 		d.radius = line.get_field(6).parse_int()
-		var dmg: Array[int] = []
+		var _dmg: Array[int] = []
 		for i in range(7, 13):
-			dmg.append(line.get_field(i).parse_int())
-		d.dmg = dmg
+			_dmg.append(line.get_field(i).parse_int())
+		d.dmg = _dmg
 		d.flavor = line.get_field(13).parse_text()
 		return d
 

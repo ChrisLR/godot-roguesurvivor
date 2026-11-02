@@ -35,6 +35,8 @@ func update_sensors(game: RogueGame) -> Array[Percept]:
 
 
 func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
+	if not has_valid_location():
+		return null
 	var fov = _los_sensor.fov
 	var map_percepts = filter_same_map(game, percepts)
 

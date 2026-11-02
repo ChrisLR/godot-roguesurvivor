@@ -25,6 +25,7 @@ class ChoiceEval:
 
 ## C# protected Actor m_Actor : ported as an alias of the inherited
 ## ActorController.controlled_actor (the ported controllers use _actor).
+@warning_ignore("unused_private_class_variable")
 var _actor: Actor:
 	get:
 		return controlled_actor
@@ -66,6 +67,71 @@ var _reserved_equipment_slots: int = 0
 ## Port of the C# ref lastItemsSaw state kept by controllers, see
 ## behavior_go_get_interesting_items.
 var _last_items_saw: Percept = null
+# Save-system registries: concrete controllers register the MemorizedSensor /
+# ExplorationData instances they create in create_sensors() so their memory
+# can be persisted (take_control -> create_sensors runs before the restore).
+var _tracked_sensors: Array[MemorizedSensor] = []
+var _tracked_explorations: Array[ExplorationData] = []
+
+
+func _track_memorized_sensor(s: MemorizedSensor) -> MemorizedSensor:
+	_tracked_sensors.append(s)
+	return s
+
+
+func _track_exploration(e: ExplorationData) -> ExplorationData:
+	_tracked_explorations.append(e)
+	return e
+
+
+## Serialize the AI memory worth persisting: taboo tiles/trades, reserved
+## equipment slots, memorized sensor percepts and exploration locations.
+## (Taboo ITEMS are Item instances with no global ref scheme and are not
+## persisted; worst case after a load an AI reconsiders a rejected item.)
+func serialize_ai_state() -> Dictionary:
+	var taboo_trades_data = null
+	if _taboo_trades != null:
+		taboo_trades_data = []
+		for a in _taboo_trades:
+			taboo_trades_data.append(Session.actor_ref(a))
+	var sensors_data := []
+	for s in _tracked_sensors:
+		sensors_data.append(s.serialize())
+	var explorations_data := []
+	for e in _tracked_explorations:
+		explorations_data.append(e.serialize())
+	return {
+		"taboo_tiles": _taboo_tiles,
+		"taboo_trades": taboo_trades_data,
+		"reserved_equipment_slots": _reserved_equipment_slots,
+		"sensors": sensors_data,
+		"explorations": explorations_data,
+	}
+
+
+## Restore AI memory saved by serialize_ai_state(). Must be called after
+## take_control (so the tracked sensors/explorations exist), i.e. from
+## Actor.resolve_refs with the loaded world graph.
+func deserialize_ai_state(world: World, data: Dictionary) -> void:
+	if data == null:
+		return
+	_taboo_tiles = data.get("taboo_tiles", null)
+	var trades_data = data.get("taboo_trades")
+	if trades_data != null:
+		_taboo_trades = []
+		for ref in trades_data:
+			var a := Session.actor_from_ref(world, ref)
+			if a != null:
+				_taboo_trades.append(a)
+	else:
+		_taboo_trades = null
+	_reserved_equipment_slots = data.get("reserved_equipment_slots", 0)
+	var sensors_data: Array = data.get("sensors", [])
+	for i in mini(sensors_data.size(), _tracked_sensors.size()):
+		_tracked_sensors[i].deserialize(world, sensors_data[i])
+	var explorations_data: Array = data.get("explorations", [])
+	for i in mini(explorations_data.size(), _tracked_explorations.size()):
+		_tracked_explorations[i].deserialize(world, explorations_data[i])
 
 
 # Properties
@@ -100,14 +166,26 @@ var taboo_trades:
 func take_control(actor: Actor) -> void:
 	super(actor)
 
-	create_sensors()
-
 	_taboo_items = null
 	_taboo_tiles = null
 	_taboo_trades = null
+	# Cleared first so create_sensors() re-registers them via the _track_*
+	# helpers; their saved memory is restored later in deserialize_ai_state
+	# (called from Actor.resolve_refs).
+	_tracked_sensors.clear()
+	_tracked_explorations.clear()
+	create_sensors()
 
 
 ## C# SetOrder(newOrder) : inherited AIController.set_order already stores it.
+
+
+## True when the controlled actor has a model and a valid map location.
+## Concrete controllers should call this at the top of select_action() /
+## update_sensors() before dereferencing _actor.location.map or _actor.model.
+func has_valid_location() -> bool:
+	return controlled_actor != null and controlled_actor.model != null \
+		and controlled_actor.location != null and controlled_actor.location.map != null
 
 
 ## C# GetAction(game).
@@ -116,6 +194,10 @@ func get_action(p_game: RogueGame) -> ActorAction:
 	# 1. Update sensors.
 	# 2. Issue action.
 	#########################
+
+	# Guard: actor may have no valid location (removed from map, mid-transition).
+	if not has_valid_location():
+		return null
 
 	# 2. Update sensors.
 	var percepts: Array[Percept] = update_sensors(p_game)
@@ -141,20 +223,20 @@ func create_sensors() -> void:
 
 ## Abstract. C# UpdateSensors(game). Base fallback: no percepts, so the
 ## actor simply waits (see get_action).
-func update_sensors(p_game: RogueGame) -> Array[Percept]:
+func update_sensors(_p_game: RogueGame) -> Array[Percept]:
 	return []
 
 
 ## Abstract. C# SelectAction(game, percepts). Base fallback: null, which
 ## get_action turns into an ActionWait.
-func select_action(p_game: RogueGame, percepts: Array[Percept]) -> ActorAction:
+func select_action(_p_game: RogueGame, _percepts: Array[Percept]) -> ActorAction:
 	return null
 
 
 # Common sensor filters
 
 ## C# FilterSameMap(game, percepts).
-func filter_same_map(p_game: RogueGame, percepts) -> Variant:
+func filter_same_map(_p_game: RogueGame, percepts) -> Variant:
 	if percepts == null or percepts.size() == 0:
 		return null
 
@@ -206,7 +288,7 @@ func filter_non_enemies(p_game: RogueGame, percepts) -> Variant:
 
 
 ## C# FilterCurrent(game, percepts).
-func filter_current(p_game: RogueGame, percepts) -> Variant:
+func filter_current(_p_game: RogueGame, percepts) -> Variant:
 	if percepts == null or percepts.size() == 0:
 		return null
 
@@ -241,7 +323,7 @@ func filter_nearest(p_game: RogueGame, percepts) -> Variant:
 
 
 ## C# FilterStrongestScent(game, scents).
-func filter_strongest_scent(p_game: RogueGame, scents) -> Variant:
+func filter_strongest_scent(_p_game: RogueGame, scents) -> Variant:
 	if scents == null or scents.size() == 0:
 		return null
 
@@ -262,7 +344,7 @@ func filter_strongest_scent(p_game: RogueGame, scents) -> Variant:
 
 
 ## C# FilterActorsModel(game, percepts, model).
-func filter_actors_model(p_game: RogueGame, percepts, model: ActorModel) -> Variant:
+func filter_actors_model(_p_game: RogueGame, percepts, model: ActorModel) -> Variant:
 	if percepts == null or percepts.size() == 0:
 		return null
 
@@ -279,7 +361,7 @@ func filter_actors_model(p_game: RogueGame, percepts, model: ActorModel) -> Vari
 
 
 ## C# FilterActors(game, percepts, predicateFn).
-func filter_actors(p_game: RogueGame, percepts, predicate_fn: Callable) -> Variant:
+func filter_actors(_p_game: RogueGame, percepts, predicate_fn: Callable) -> Variant:
 	if percepts == null or percepts.size() == 0:
 		return null
 
@@ -319,7 +401,7 @@ func filter_corpses(p_game: RogueGame, percepts) -> Variant:
 
 
 ## C# Filter(game, percepts, predicateFn).
-func filter(p_game: RogueGame, percepts, predicate_fn: Callable) -> Variant:
+func filter(_p_game: RogueGame, percepts, predicate_fn: Callable) -> Variant:
 	if percepts == null or percepts.size() == 0:
 		return null
 
@@ -335,7 +417,7 @@ func filter(p_game: RogueGame, percepts, predicate_fn: Callable) -> Variant:
 
 
 ## C# FilterFirst(game, percepts, predicateFn).
-func filter_first(p_game: RogueGame, percepts, predicate_fn: Callable) -> Variant:
+func filter_first(_p_game: RogueGame, percepts, predicate_fn: Callable) -> Variant:
 	if percepts == null or percepts.size() == 0:
 		return null
 
@@ -372,7 +454,7 @@ func sort_by_distance(p_game: RogueGame, percepts) -> Variant:
 
 ## Most recent first.
 ## C# SortByDate(game, percepts).
-func sort_by_date(p_game: RogueGame, percepts) -> Variant:
+func sort_by_date(_p_game: RogueGame, percepts) -> Variant:
 	if percepts == null or percepts.size() == 0:
 		return null
 
@@ -537,7 +619,7 @@ func behavior_bump_toward(p_game: RogueGame, goal: Vector2i, can_check_break: bo
 # alpha10
 ## For intelligent npcs, additional cost to distance cost when chosing which adj tile to bump to.
 ## C# EstimateBumpActionCost(game, loc, action).
-func estimate_bump_action_cost(p_game: RogueGame, loc: Location, action: ActorAction) -> float:
+func estimate_bump_action_cost(_p_game: RogueGame, loc: Location, action: ActorAction) -> float:
 	var cost: float = 0
 
 	if action is ActionBump:
@@ -784,10 +866,10 @@ func behavior_unequip_cell_phone_if_leader_has_not(p_game: RogueGame) -> ActorAc
 		return null
 
 	# get left eq item.
-	var tr: ItemTracker = controlled_actor.get_equipped_item(Doll.DollPart.LEFT_HAND) as ItemTracker
-	if tr == null:
+	var _tr: ItemTracker = controlled_actor.get_equipped_item(Doll.DollPart.LEFT_HAND) as ItemTracker
+	if _tr == null:
 		return null
-	if not tr.can_track_followers_or_leader():
+	if not _tr.can_track_followers_or_leader():
 		return null
 
 	# we have a cell phone equiped.
@@ -795,8 +877,8 @@ func behavior_unequip_cell_phone_if_leader_has_not(p_game: RogueGame) -> ActorAc
 	var leader_tr: ItemTracker = controlled_actor.leader.get_equipped_item(Doll.DollPart.LEFT_HAND) as ItemTracker
 	if leader_tr == null or not leader_tr.can_track_followers_or_leader():
 		# unequip!
-		if p_game.rules.can_actor_unequip_item(controlled_actor, tr).ok:
-			return ActionUnequipItem.new(controlled_actor, p_game, tr)
+		if p_game.rules.can_actor_unequip_item(controlled_actor, _tr).ok:
+			return ActionUnequipItem.new(controlled_actor, p_game, _tr)
 
 	# fail.
 	return null
@@ -931,7 +1013,7 @@ func behavior_equip_best_stench_killer(p_game: RogueGame) -> ActorAction:
 
 
 ## C# WantsCellPhoneEquipped(game).
-func wants_cell_phone_equipped(p_game: RogueGame) -> bool:
+func wants_cell_phone_equipped(_p_game: RogueGame) -> bool:
 	# follower wants if leader has one equipped,
 	# leader wants if any follower has one with batteries in its inventory
 	if controlled_actor.has_leader:
@@ -1347,7 +1429,7 @@ func behavior_build_trap(p_game: RogueGame) -> ActorAction:
 
 
 ## C# IsGoodTrapSpot(game, map, pos, out reason) -> Dictionary {"ok":..., "reason":...}.
-func is_good_trap_spot(p_game: RogueGame, map: Map, pos: Vector2i) -> Dictionary:
+func is_good_trap_spot(_p_game: RogueGame, map: Map, pos: Vector2i) -> Dictionary:
 	var reason: String = ""
 	var potential_spot: bool = false
 
@@ -1356,14 +1438,14 @@ func is_good_trap_spot(p_game: RogueGame, map: Map, pos: Vector2i) -> Dictionary
 
 	# 1. Potential spot?
 	# outside and has a corpse.
-	var is_inside: bool = map.get_tile_at_p(pos).is_inside
-	if not is_inside and map.get_corpses_at(pos) != null:
+	var _is_inside: bool = map.get_tile_at_p(pos).is_inside
+	if not _is_inside and map.get_corpses_at(pos) != null:
 		reason = "that corpse will serve as a bait for"
 		potential_spot = true
 	else:
 		#  entering or leaving a building?
 		var was_inside: bool = _prev_location.map.get_tile_at_p(_prev_location.position).is_inside
-		if was_inside != is_inside:
+		if was_inside != _is_inside:
 			reason = "protecting the building with"
 			potential_spot = true
 		else:
@@ -1425,7 +1507,7 @@ func behavior_build_small_fortification(p_game: RogueGame) -> ActorAction:
 			if map.get_exit_at(pt) != null:
 				return false
 			return is_doorway_or_corridor(p_game, map, pt),
-		func(dir: Direction) -> float:
+		func(_dir: Direction) -> float:
 			return float(p_game.rules.roll(0, 666)),
 		func(a: float, b: float) -> bool:
 			return a > b)
@@ -1496,7 +1578,7 @@ func behavior_build_large_fortification(p_game: RogueGame, start_line_chance: in
 
 			# nope.
 			return false,
-		func(dir: Direction) -> float:
+		func(_dir: Direction) -> float:
 			return float(p_game.rules.roll(0, 666)),
 		func(a: float, b: float) -> bool:
 			return a > b)
@@ -1638,7 +1720,7 @@ func behavior_use_medecine(p_game: RogueGame, factor_healing: int, factor_stamin
 
 	# use best item.
 	var best_med_choice: BaseAI.ChoiceEval = choose(p_game, med_items,
-		func(it: ItemMedicine) -> bool:
+		func(_it: ItemMedicine) -> bool:
 			return true,
 		func(it: ItemMedicine) -> float:
 			var score: int = 0
@@ -1739,13 +1821,13 @@ func behavior_hang_around_actor(p_game: RogueGame, other: Actor, other_position:
 	var hang_spot: Vector2i
 	var tries: int = 0
 	var MAX_TRIES: int = 100
-	while true:
+	while tries < MAX_TRIES:
 		hang_spot = other_position
 		hang_spot.x += p_game.rules.roll(min_dist, max_dist + 1) - p_game.rules.roll(min_dist, max_dist + 1)
 		hang_spot.y += p_game.rules.roll(min_dist, max_dist + 1) - p_game.rules.roll(min_dist, max_dist + 1)
 		hang_spot = controlled_actor.location.map.trim_to_bounds(hang_spot.x, hang_spot.y)
 		tries += 1
-		if not (p_game.rules.grid_distance_points(hang_spot, other_position) < min_dist and tries < MAX_TRIES):
+		if p_game.rules.grid_distance_points(hang_spot, other_position) >= min_dist:
 			break
 
 	# try to get close.
@@ -1902,7 +1984,7 @@ func behavior_dont_leave_followers_behind(p_game: RogueGame, distance: int) -> D
 ## Engage in mele fight with the nearest reachable enemy or flee from him.
 ## emotes : 0 = flee; 1 = trapped; 2 = charge.
 ## C# BehaviorFightOrFlee(game, enemies, hasVisibleLeader, isLeaderFighting, courage, emotes, allowedChargeActions).
-func behavior_fight_or_flee(p_game: RogueGame, enemies, has_visible_leader: bool, is_leader_fighting: bool, courage: int,
+func behavior_fight_or_flee(p_game: RogueGame, enemies, _has_visible_leader: bool, is_leader_fighting: bool, courage: int,
 		emotes: Array, allowed_charge_actions: int) -> ActorAction:
 	# alpha10 filter out unreachables if no ranged weapon equipped
 	# (we shouldnt be here anyway if we have a ranged weapon)
@@ -1933,7 +2015,7 @@ func behavior_fight_or_flee(p_game: RogueGame, enemies, has_visible_leader: bool
 	# get safe range from enemy, just out of his reach.
 	var safe_range: int = maxi(2, enemy_attack.range_value + 1)  # melee attack range is 0 not 1!
 	var dist_to_enemy: int = p_game.rules.grid_distance_points(controlled_actor.location.position, enemy.location.position)
-	var in_safe_range: bool = dist_to_enemy >= safe_range
+	var _in_safe_range: bool = dist_to_enemy >= safe_range
 
 	# Cases that are a no brainer, in this order:
 	# 1. Always fight if he has a ranged weapon.
@@ -1979,7 +2061,9 @@ func behavior_fight_or_flee(p_game: RogueGame, enemies, has_visible_leader: bool
 						do_run = not has_speed_advantage(p_game, controlled_actor, enemy)
 
 				_:
-					assert(false, "unhandled courage")
+					# C# threw; keep a safe default (stand ground) instead of
+					# hard-crashing debug builds.
+					push_error("unhandled courage %s" % courage)
 		else:
 			########################
 			# Leaderless fighting.
@@ -1996,7 +2080,9 @@ func behavior_fight_or_flee(p_game: RogueGame, enemies, has_visible_leader: bool
 					do_run = not has_speed_advantage(p_game, controlled_actor, enemy)
 
 				_:
-					assert(false, "unhandled courage")
+					# C# threw; keep a safe default (stand ground) instead of
+					# hard-crashing debug builds.
+					push_error("unhandled courage %s" % courage)
 
 	# alpha10
 	# Improve STA management a bit.
@@ -2052,7 +2138,7 @@ func behavior_fight_or_flee(p_game: RogueGame, enemies, has_visible_leader: bool
 					if p_game.rules.grid_distance_points(pos, enemy.location.position) == 1 and p_game.rules.is_closable_for(enemy, door).ok:
 						return false
 					return true,
-				func(dir: Direction) -> float:
+				func(_dir: Direction) -> float:
 					return float(p_game.rules.roll(0, 666)),  # random eval, all things being equal.
 				func(a: float, b: float) -> bool:
 					return a > b)
@@ -2072,7 +2158,7 @@ func behavior_fight_or_flee(p_game: RogueGame, enemies, has_visible_leader: bool
 					if not p_game.rules.can_actor_barricade_door(controlled_actor, door).ok:
 						return false
 					return true,
-				func(dir: Direction) -> float:
+				func(_dir: Direction) -> float:
 					return float(p_game.rules.roll(0, 666)),  # random eval, all things being equal.
 				func(a: float, b: float) -> bool:
 					return a > b)
@@ -2233,7 +2319,8 @@ func behavior_tell_friend_about_percept(p_game: RogueGame, percept: Percept) -> 
 		var raid_desc: String = percept.percepted
 		tell_msg = "I heard %s %s %s!" % [raid_desc, where_msg, time_msg]
 	else:
-		assert(false, "unhandled percept.Percepted type")
+		# C# threw; don't hard-crash debug builds.
+		push_error("unhandled percept.Percepted type")
 		return null
 
 	# tell friend - if legal.
@@ -2331,8 +2418,8 @@ func behavior_explore(p_game: RogueGame, exploration: ExplorationData) -> ActorA
 				if traps_dmg > 0:
 					score += traps_dmg * AVOID_TRAPS
 			# 5th Prefer inside during the night vs outside during the day, and inside if sleepy // alpha10.1
-			var is_inside: bool = map.get_tile_at(pos.x, pos.y).is_inside
-			if is_inside:
+			var _is_inside: bool = map.get_tile_at(pos.x, pos.y).is_inside
+			if _is_inside:
 				if p_game.rules.is_almost_sleepy(controlled_actor):
 					score += EXPLORE_IN_ALMOST_SLEEPY
 				if map.local_time.is_night:
@@ -2747,7 +2834,7 @@ func behavior_use_stench_killer(p_game: RogueGame) -> ActorAction:
 
 
 ## C# IsGoodStenchKillerSpot(game, map, pos).
-func is_good_stench_killer_spot(p_game: RogueGame, map: Map, pos: Vector2i) -> bool:
+func is_good_stench_killer_spot(_p_game: RogueGame, map: Map, pos: Vector2i) -> bool:
 	# alpha10 obsolete 1. Don't spray at an already sprayed spot.
 	# 2. Spray in a good position:
 	#    2.1 entering or leaving a building.
@@ -2758,8 +2845,8 @@ func is_good_stench_killer_spot(p_game: RogueGame, map: Map, pos: Vector2i) -> b
 
 	#    2.1 entering or leaving a building.
 	var was_inside: bool = _prev_location.map.get_tile_at_p(_prev_location.position).is_inside
-	var is_inside: bool = map.get_tile_at_p(pos).is_inside
-	if was_inside != is_inside:
+	var _is_inside: bool = map.get_tile_at_p(pos).is_inside
+	if was_inside != _is_inside:
 		return true
 	#    2.2 a door/window.
 	var obj_there: MapObject = map.get_map_object_at(pos)
@@ -3244,7 +3331,7 @@ func is_interesting_item_to_own(p_game: RogueGame, it: Item, item_src: int) -> b
 func has_any_interesting_item(p_game: RogueGame, inv: Inventory, inventory_src: int) -> bool:
 	if inv == null:
 		return false
-	var owned: bool = (inv == controlled_actor.inventory)
+	var _owned: bool = (inv == controlled_actor.inventory)
 	for it in inv.items:
 		if is_interesting_item_to_own(p_game, it, inventory_src):
 			return true
@@ -3255,7 +3342,7 @@ func has_any_interesting_item(p_game: RogueGame, inv: Inventory, inventory_src: 
 func first_interesting_item(p_game: RogueGame, inv: Inventory, inventory_src: int) -> Item:
 	if inv == null:
 		return null
-	var owned: bool = (inv == controlled_actor.inventory)
+	var _owned: bool = (inv == controlled_actor.inventory)
 	for it in inv.items:
 		if is_interesting_item_to_own(p_game, it, inventory_src):
 			return it
@@ -3271,7 +3358,7 @@ func is_container_at(loc: Location) -> bool:
 
 
 ## C# GetBestMeleeWeapon(game, fn). fn can be null.
-func get_best_melee_weapon(p_game: RogueGame, fn: Callable = Callable()) -> ItemMeleeWeapon:
+func get_best_melee_weapon(_p_game: RogueGame, fn: Callable = Callable()) -> ItemMeleeWeapon:
 	var best: ItemMeleeWeapon = null
 	var best_score: int = -1
 
@@ -3297,7 +3384,7 @@ func score_melee_weapon(m_wp: ItemMeleeWeapon) -> int:
 ## Get best light in inventory with preference for currently equipped light to avoid infinite equip-unequip loops.
 ## Note that the returned light might have 0 batteries!
 ## C# GetBestLight(game, fn). fn can be null.
-func get_best_light(p_game: RogueGame, fn: Callable = Callable()) -> ItemLight:
+func get_best_light(_p_game: RogueGame, fn: Callable = Callable()) -> ItemLight:
 	var equipped_light: ItemLight = null
 	var best_scoring_light: ItemLight = null
 	var best_score: int = -1
@@ -3348,7 +3435,7 @@ func score_light(light: ItemLight) -> int:
 
 
 ## C# GetBestCellPhone(game, fn). fn can be null.
-func get_best_cell_phone(p_game: RogueGame, fn: Callable = Callable()) -> ItemTracker:
+func get_best_cell_phone(_p_game: RogueGame, fn: Callable = Callable()) -> ItemTracker:
 	# if one equipped with batteries, that's it.
 	var eq_phone: ItemTracker = get_equipped_cell_phone()
 	if eq_phone != null and eq_phone.batteries > 0 and (fn.is_null() or fn.call(eq_phone)):
@@ -3363,7 +3450,7 @@ func get_best_cell_phone(p_game: RogueGame, fn: Callable = Callable()) -> ItemTr
 
 
 ## C# GetBestStenchKiller(game, fn). fn can be null.
-func get_best_stench_killer(p_game: RogueGame, fn: Callable = Callable()) -> ItemSprayScent:
+func get_best_stench_killer(_p_game: RogueGame, fn: Callable = Callable()) -> ItemSprayScent:
 	var best: ItemSprayScent = null
 	var best_score: int = -1
 
@@ -3525,10 +3612,10 @@ func rate_item(p_game: RogueGame, it: Item, owned: bool) -> int:
 
 	# j5 Unsafe activated traps and empty cans
 	if it is ItemTrap:
-		var tr := it as ItemTrap
-		if tr.model == p_game.game_items.empty_can():
+		var _tr := it as ItemTrap
+		if _tr.model == p_game.game_items.empty_can():
 			return ItemRating.JUNK
-		if tr.is_activated() and not p_game.rules.is_safe_from_trap(tr, controlled_actor):
+		if _tr.is_activated() and not p_game.rules.is_safe_from_trap(_tr, controlled_actor):
 			return ItemRating.JUNK
 
 	# j6 Primed explosives.
@@ -4358,7 +4445,7 @@ func get_compatible_ammo_item(p_game: RogueGame, rw: ItemRangedWeapon, check_for
 
 
 ## C# GetCompatibleRangedWeapon(game, am).
-func get_compatible_ranged_weapon(p_game: RogueGame, am: ItemAmmo) -> ItemRangedWeapon:
+func get_compatible_ranged_weapon(_p_game: RogueGame, am: ItemAmmo) -> ItemRangedWeapon:
 	if controlled_actor.inventory == null:
 		return null
 
@@ -4375,7 +4462,7 @@ func get_compatible_ranged_weapon(p_game: RogueGame, am: ItemAmmo) -> ItemRanged
 
 
 ## C# GetBestBodyArmor(game, fn).
-func get_best_body_armor(p_game: RogueGame, fn: Callable) -> ItemBodyArmor:
+func get_best_body_armor(_p_game: RogueGame, fn: Callable) -> ItemBodyArmor:
 	if controlled_actor.inventory == null:
 		return null
 
@@ -4442,7 +4529,7 @@ func want_to_evade_melee(p_game: RogueGame, actor: Actor, courage: int, target: 
 ## Get which of the two actor can be considered as a weaker one in a melee fight.
 ## Returns weaker actor, null if they are equal.
 ## C# FindWeakerInMelee(game, a, b).
-func find_weaker_in_melee(p_game: RogueGame, a: Actor, b: Actor) -> Actor:
+func find_weaker_in_melee(_p_game: RogueGame, a: Actor, b: Actor) -> Actor:
 	# alpha10 count how many hits it would take to kill each other
 	# the actor that dies faster is the weaker one
 
@@ -4464,7 +4551,7 @@ func find_weaker_in_melee(p_game: RogueGame, a: Actor, b: Actor) -> Actor:
 
 
 ## C# WillTireAfterAttack(game, actor).
-func will_tire_after_attack(p_game: RogueGame, actor: Actor) -> bool:
+func will_tire_after_attack(_p_game: RogueGame, actor: Actor) -> bool:
 	if not actor.model.abilities.can_tire:
 		return false
 	var sta_after: int = actor.stamina_points - Rules.STAMINA_COST_MELEE_ATTACK
@@ -4472,7 +4559,7 @@ func will_tire_after_attack(p_game: RogueGame, actor: Actor) -> bool:
 
 
 ## C# WillTireAfterRunning(game, actor).
-func will_tire_after_running(p_game: RogueGame, actor: Actor) -> bool:
+func will_tire_after_running(_p_game: RogueGame, actor: Actor) -> bool:
 	if not actor.model.abilities.can_tire:
 		return false
 	var sta_after: int = actor.stamina_points - Rules.STAMINA_COST_RUNNING
@@ -4499,7 +4586,7 @@ func has_speed_advantage(p_game: RogueGame, actor: Actor, target: Actor) -> bool
 
 
 ## C# NeedsLight(game).
-func needs_light(p_game: RogueGame) -> bool:
+func needs_light(_p_game: RogueGame) -> bool:
 	match controlled_actor.location.map.lighting:
 		Map.Lighting.DARKNESS:
 			return true
@@ -4524,7 +4611,7 @@ func is_between(p_game: RogueGame, a: Vector2i, between: Vector2i, b: Vector2i) 
 
 
 ## C# IsDoorwayOrCorridor(game, map, pos).
-func is_doorway_or_corridor(p_game: RogueGame, map: Map, pos: Vector2i) -> bool:
+func is_doorway_or_corridor(_p_game: RogueGame, map: Map, pos: Vector2i) -> bool:
 
 
 	var wall: bool = not map.get_tile_at_p(pos).model.is_walkable
@@ -4591,14 +4678,14 @@ func get_nearest_target_for(p_game: RogueGame, actor: Actor) -> Actor:
 
 # alpha10
 ## C# GetActorAttack(game, actor).
-func get_actor_attack(p_game: RogueGame, actor: Actor) -> Attack:
+func get_actor_attack(_p_game: RogueGame, actor: Actor) -> Attack:
 	return actor.current_ranged_attack if actor.get_equipped_ranged_weapon() != null else actor.current_melee_attack
 
 
 # Exits
 
 ## C# ListAdjacentExits(game, fromLocation).
-func list_adjacent_exits(p_game: RogueGame, from_location: Location) -> Variant:
+func list_adjacent_exits(_p_game: RogueGame, from_location: Location) -> Variant:
 	var list = null
 	for d in Direction.COMPASS:
 		var next_pos: Vector2i = from_location.position + d.vector

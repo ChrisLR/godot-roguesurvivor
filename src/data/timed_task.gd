@@ -21,7 +21,7 @@ func tick(map: Map) -> void:
 
 
 ## Abstract. C# Trigger(m).
-func trigger(p_map: Map) -> void:
+func trigger(_p_map: Map) -> void:
 	assert(false, "abstract method")
 
 
@@ -33,7 +33,7 @@ func serialize() -> Dictionary:
 
 
 ## Overridden by subclasses to add their own fields.
-func _serialize_fields(d: Dictionary) -> void:
+func _serialize_fields(_d: Dictionary) -> void:
 	pass
 
 
@@ -49,5 +49,5 @@ static func deserialize_data(data: Dictionary) -> TimedTask:
 
 
 ## Overridden by subclasses to restore their own fields.
-func _deserialize_fields(d: Dictionary) -> void:
+func _deserialize_fields(_d: Dictionary) -> void:
 	pass

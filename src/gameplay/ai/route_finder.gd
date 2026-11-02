@@ -63,7 +63,15 @@ func can_reach_simple(game: RogueGame, dest: Vector2i, max_dist: int, distance_f
 	# search similar to A*...
 	_nodes.clear()
 	_nodes.append(_make_node(start, distance_fn.call(start, dest)))
+	# Safety cap: exploration is bounded by map size + strictly-decreasing
+	# distance, but never loop unbounded if that invariant ever breaks.
+	var iterations := 0
+	const MAX_ITERATIONS := 100000
 	while true:
+		iterations += 1
+		if iterations > MAX_ITERATIONS:
+			push_warning("RouteFinder.can_reach_simple: iteration cap hit, giving up.")
+			return false
 		# get most promising node, nodes are sorted by their distance to goal.
 		var current_idx: int = -1
 		for i: int in _nodes.size():

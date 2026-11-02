@@ -102,3 +102,28 @@ func update(location: Location) -> void:
 			if has_explored_zone(z):
 				continue
 			add_explored_zone(z)
+
+
+# --- save system ---
+## Only the locations queue is persisted: zones have no global ref scheme
+## (they live inside maps), so the zones queue restarts empty after a load.
+func serialize() -> Dictionary:
+	var locs := []
+	for l in _locations_queue:
+		locs.append(Location.serialize(l))
+	return {
+		"locations_queue_size": _locations_queue_size,
+		"zones_queue_size": _zones_queue_size,
+		"locations": locs,
+	}
+
+
+func deserialize(world: World, data: Dictionary) -> void:
+	if data == null:
+		return
+	_locations_queue.clear()
+	for l in data.get("locations", []):
+		_locations_queue.append(Location.deserialize_data(world, l))
+	# keep the queue within its capacity.
+	while _locations_queue.size() > _locations_queue_size:
+		_locations_queue.pop_front()

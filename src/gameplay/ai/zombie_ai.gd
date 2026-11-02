@@ -29,13 +29,13 @@ func take_control(actor: Actor) -> void:
 	super(actor)
 
 	if _actor.model.abilities.zombie_ai_explore:
-		_exploration = ExplorationData.new(EXPLORATION_LOCATIONS, EXPLORATION_ZONES)
+		_exploration = _track_exploration(ExplorationData.new(EXPLORATION_LOCATIONS, EXPLORATION_ZONES))
 
 
 func create_sensors() -> void:
-	_mem_los_sensor = MemorizedSensor.new(
+	_mem_los_sensor = _track_memorized_sensor(MemorizedSensor.new(
 		LOSSensor.new(LOSSensor.SensingFilter.ACTORS | LOSSensor.SensingFilter.CORPSES),
-		LOS_MEMORY)
+		LOS_MEMORY))
 	_living_smell_sensor = SmellSensor.new(Odor.LIVING)
 	_master_smell_sensor = SmellSensor.new(Odor.UNDEAD_MASTER)
 
@@ -48,7 +48,9 @@ func update_sensors(game: RogueGame) -> Array[Percept]:
 
 
 func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
-	var fov = (_mem_los_sensor.sensor as LOSSensor).fov
+	if not has_valid_location():
+		return null
+	var _fov = (_mem_los_sensor.sensor as LOSSensor).fov
 	var map_percepts = filter_same_map(game, percepts)
 
 	##############################################################

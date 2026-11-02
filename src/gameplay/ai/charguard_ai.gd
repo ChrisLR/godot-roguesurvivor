@@ -23,7 +23,7 @@ var _memorized_sensor: MemorizedSensor = null
 
 func create_sensors() -> void:
 	_los_sensor = LOSSensor.new(LOSSensor.SensingFilter.ACTORS | LOSSensor.SensingFilter.ITEMS)
-	_memorized_sensor = MemorizedSensor.new(_los_sensor, LOS_MEMORY)
+	_memorized_sensor = _track_memorized_sensor(MemorizedSensor.new(_los_sensor, LOS_MEMORY))
 
 
 func take_control(actor: Actor) -> void:
@@ -35,6 +35,8 @@ func update_sensors(game: RogueGame) -> Array[Percept]:
 
 
 func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
+	if not has_valid_location():
+		return null
 	var map_percepts = filter_same_map(game, percepts)
 
 	# alpha10

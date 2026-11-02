@@ -22,7 +22,7 @@ func _init(p_rules: Rules) -> void:
 
 
 ## Abstract in C#. Subclasses must override.
-func generate(seed: int) -> Map:
+func generate(_seed: int) -> Map:
 	assert(false, "MapGenerator.Generate is abstract")
 	return null
 
@@ -98,13 +98,13 @@ func dig_until(map: Map, model: TileModel, start_pos: Vector2i, dig_direction: D
 	return dig_pos
 
 
-func do_for_each_tile(map: Map, rect: Rect2i, do_fn: Callable) -> void:
+func do_for_each_tile(_map: Map, rect: Rect2i, do_fn: Callable) -> void:
 	for x in range(rect.position.x, rect.end.x):
 		for y in range(rect.position.y, rect.end.y):
 			do_fn.call(Vector2i(x, y))
 
 
-func check_for_each_tile(map: Map, rect: Rect2i, pred_fn: Callable) -> bool:
+func check_for_each_tile(_map: Map, rect: Rect2i, pred_fn: Callable) -> bool:
 	for x in range(rect.position.x, rect.end.x):
 		for y in range(rect.position.y, rect.end.y):
 			if not pred_fn.call(Vector2i(x, y)):

@@ -90,14 +90,14 @@ func serialize() -> Dictionary:
 		"hit2_value": hit2_value,
 		"hit3_value": hit3_value,
 		"kind": kind,
-		"verb": verb.serialize() if verb != null else null,
+		"verb": (verb.serialize() as Variant) if verb != null else null,
 	}
 
 
 static func deserialize_data(data: Dictionary) -> Attack:
 	var verb_data = data.get("verb")
-	var verb: Verb = Verb.deserialize_data(verb_data) if verb_data != null else Verb.new("hit")
-	return Attack.new(data.get("kind", AttackKind.PHYSICAL), verb,
+	var _verb: Verb = Verb.deserialize_data(verb_data) if verb_data != null else Verb.new("hit")
+	return Attack.new(data.get("kind", AttackKind.PHYSICAL), _verb,
 		data.get("hit_value", 0), data.get("hit2_value", 0), data.get("hit3_value", 0),
 		data.get("damage_value", 0), data.get("stamina_penalty", 0),
 		data.get("disarm_chance", 0), data.get("range_value", 0))

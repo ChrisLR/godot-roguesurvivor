@@ -159,7 +159,7 @@ func consume(it: Item) -> void:
 		_items.erase(it)
 
 
-func _add_to_stack(from: Item, add_this: int, to: Item) -> int:
+func _add_to_stack(_from: Item, add_this: int, to: Item) -> int:
 	var added: int = 0
 	while add_this > 0 && to.quantity < to.model.stacking_limit:
 		to.quantity += 1
@@ -240,12 +240,9 @@ func contains(it: Item) -> bool:
 ## the inventory and confuses him.
 ## Don't abuse it, nice O^2...
 func defrag() -> void:
-	var count_empty_stacks_to_remove: int
-
 	# iterate over all stackable items to see if we can "steal" quantity from other stacks.
 	# since we iterate from left to right and steal from the right, the leftmost stacks will always be
 	# the biggest one.
-	count_empty_stacks_to_remove = 0
 	var n: int = _items.size()
 	for i in n:
 		var merge_with: Item = _items[i]
@@ -257,21 +254,12 @@ func defrag() -> void:
 					var steal: int = min(merge_with.model.stacking_limit - merge_with.quantity, steal_from.quantity)
 					merge_with.quantity += steal
 					steal_from.quantity -= steal
-					if steal_from.quantity <= 0:
-						count_empty_stacks_to_remove += 1
 				j += 1
 
-	# some smaller stacks might now be empty, delete them now.
-	if count_empty_stacks_to_remove > 0:
-		var i: int = 0
-		while true:
-			if _items[i].quantity <= 0:
-				count_empty_stacks_to_remove -= 1
-				_items.remove_at(i)
-			else:
-				i += 1
-			if not (i < _items.size() && count_empty_stacks_to_remove > 0):
-				break
+	# remove stacks that became empty during the merge (reverse iteration is safe).
+	for i in range(_items.size() - 1, -1, -1):
+		if _items[i].quantity <= 0:
+			_items.remove_at(i)
 
 
 # Helpers
@@ -387,10 +375,10 @@ func optimize_before_saving() -> void:
 
 # --- save system ---
 func serialize() -> Dictionary:
-	var items := []
+	var __items := []
 	for it in _items:
-		items.append(it.serialize())
-	return {"max_capacity": max_capacity, "items": items}
+		__items.append(it.serialize())
+	return {"max_capacity": max_capacity, "items": __items}
 
 
 static func deserialize_data(data: Dictionary) -> Inventory:

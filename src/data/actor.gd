@@ -310,8 +310,8 @@ var infection: int:
 
 ## C# convenience constructor Actor(model, faction, spawnTime)
 ##     : this(model, faction, model.Name, false, false, spawnTime)
-static func new_spawn(model: ActorModel, faction: Faction, spawn_time: int) -> Actor:
-	return Actor.new(model, faction, model.name, false, false, spawn_time)
+static func new_spawn(_model: ActorModel, _faction: Faction, _spawn_time: int) -> Actor:
+	return Actor.new(_model, _faction, _model.name, false, false, _spawn_time)
 
 
 func _init(p_model: ActorModel, p_faction: Faction, p_name: String, p_is_proper_name: bool = false, p_is_plural_name: bool = false, p_spawn_time: int = 0) -> void:
@@ -628,8 +628,9 @@ func _serialize_controller() -> Dictionary:
 	var d := {"kind": "ai", "class_path": c.get_script().resource_path}
 	var ai := c as AIController
 	if ai != null:
-		d["order"] = ai.order.serialize() if ai.order != null else null
+		d["order"] = (ai.order.serialize() as Variant) if ai.order != null else null
 		d["directives"] = ai.directives.serialize()
+		d["ai_state"] = ai.serialize_ai_state()
 	return d
 
 
@@ -645,10 +646,10 @@ func serialize() -> Dictionary:
 		"faction_id": faction_id,
 		"gang_id": gang_id,
 		"name": _name,
-		"sheet": sheet.serialize() if sheet != null else null,
+		"sheet": (sheet.serialize() as Variant) if sheet != null else null,
 		"spawn_time": spawn_time,
-		"inventory": inventory.serialize() if inventory != null else null,
-		"doll": doll.serialize() if doll != null else null,
+		"inventory": (inventory.serialize() as Variant) if inventory != null else null,
+		"doll": (doll.serialize() as Variant) if doll != null else null,
 		"hit_points": _hit_points,
 		"previous_hit_points": _previous_hit_points,
 		"stamina_points": _stamina_points,
@@ -665,9 +666,9 @@ func serialize() -> Dictionary:
 		"activity": activity,
 		"target_actor": Session.actor_ref(target_actor),
 		"audio_range_mod": _audio_range_mod,
-		"current_melee_attack": current_melee_attack.serialize() if current_melee_attack != null else null,
-		"current_ranged_attack": current_ranged_attack.serialize() if current_ranged_attack != null else null,
-		"current_defence": current_defence.serialize() if current_defence != null else null,
+		"current_melee_attack": (current_melee_attack.serialize() as Variant) if current_melee_attack != null else null,
+		"current_ranged_attack": (current_ranged_attack.serialize() as Variant) if current_ranged_attack != null else null,
+		"current_defence": (current_defence.serialize() as Variant) if current_defence != null else null,
 		"leader": Session.actor_ref(leader),
 		"followers": _serialize_actor_list(followers),
 		"trust_in_leader": trust_in_leader,
@@ -686,11 +687,11 @@ func serialize() -> Dictionary:
 
 
 static func deserialize_data(data: Dictionary) -> Actor:
-	var model: ActorModel = Models.actors.get_model(data.get("model_id", 0))
-	var faction: Faction = Models.factions.get_model(data.get("faction_id", 0))
+	var _model: ActorModel = Models.actors.get_model(data.get("model_id", 0))
+	var _faction: Faction = Models.factions.get_model(data.get("faction_id", 0))
 	# The constructor rebuilds sheet/doll/inventory from the model ; all live
 	# state is then overwritten from the saved data below.
-	var a := Actor.new(model, faction, data.get("name", ""))
+	var a := Actor.new(_model, _faction, data.get("name", ""))
 	a._flags = data.get("flags", 0)
 	a.gang_id = data.get("gang_id", GameGangs.IDs.NONE)
 	var sheet_data = data.get("sheet")
@@ -754,6 +755,7 @@ static func deserialize_data(data: Dictionary) -> Actor:
 		"dragged_corpse": data.get("dragged_corpse"),
 		"trust_list": data.get("trust_list"),
 		"controller_order": cdata.get("order") if cdata.get("kind", "") == "ai" else null,
+		"controller_ai_state": cdata.get("ai_state") if cdata.get("kind", "") == "ai" else null,
 	}
 	return a
 
@@ -779,6 +781,10 @@ func resolve_refs(world: World) -> void:
 	var ai := controller as AIController
 	if ai != null and _raw_refs.get("controller_order") != null:
 		ai.set_order(ActorOrder.deserialize_data(world, _raw_refs["controller_order"]))
+	if ai != null:
+		# take_control already ran (controller setter) so the tracked
+		# sensors/explorations exist; restore their saved memory now.
+		ai.deserialize_ai_state(world, _raw_refs.get("controller_ai_state"))
 	_raw_refs.clear()
 	if inventory != null:
 		inventory.resolve_refs(world)

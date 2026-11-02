@@ -189,9 +189,9 @@ func _init(p_game, p_params: Dictionary = DEFAULT_PARAMS) -> void:
 
 # region Entry Map (Surface)
 
-func generate(seed: int) -> Map:
-	_dice_roller = DiceRoller.new(seed)
-	var map := Map.new(seed, "Base City", _params.map_width, _params.map_height)
+func generate(_seed: int) -> Map:
+	_dice_roller = DiceRoller.new(_seed)
+	var map := Map.new(_seed, "Base City", _params.map_width, _params.map_height)
 
 	###################
 	# Init with grass
@@ -289,10 +289,10 @@ func generate(seed: int) -> Map:
 
 # region Sewers Map
 
-func generate_sewers_map(seed: int, district: District) -> Map:
+func generate_sewers_map(_seed: int, district: District) -> Map:
 	# Create.
-	_dice_roller = DiceRoller.new(seed)
-	var sewers := Map.new(seed, "sewers", district.entry_map.width, district.entry_map.height)
+	_dice_roller = DiceRoller.new(_seed)
+	var sewers := Map.new(_seed, "sewers", district.entry_map.width, district.entry_map.height)
 	sewers.lighting = Map.Lighting.DARKNESS
 	sewers.add_zone(make_unique_zone("sewers", sewers.rect))
 	tile_fill_all(sewers, game.game_tiles.wall_sewer())
@@ -553,10 +553,10 @@ func generate_sewers_map(seed: int, district: District) -> Map:
 
 # region Subway Map
 
-func generate_subway_map(seed: int, district: District) -> Map:
+func generate_subway_map(_seed: int, district: District) -> Map:
 	# Create.
-	_dice_roller = DiceRoller.new(seed)
-	var subway := Map.new(seed, "subway", district.entry_map.width, district.entry_map.height)
+	_dice_roller = DiceRoller.new(_seed)
+	var subway := Map.new(_seed, "subway", district.entry_map.width, district.entry_map.height)
 	subway.lighting = Map.Lighting.DARKNESS
 	tile_fill_all(subway, game.game_tiles.wall_brick())
 
@@ -774,8 +774,8 @@ func make_blocks(map: Map, make_roads: bool, list: Array, rect: Rect2i) -> void:
 	############
 	# +N to account for the road ring.
 	var quads := quad_split(rect, _params.min_block_size + ring, _params.min_block_size + ring)
-	var split_x: int = quads.split_x
-	var split_y: int = quads.split_y
+	var _split_x: int = quads.split_x
+	var _split_y: int = quads.split_y
 	var top_left: Rect2i = quads.top_left
 	var top_right: Rect2i = quads.top_right
 	var bottom_left: Rect2i = quads.bottom_left
@@ -821,7 +821,7 @@ static func _rect_is_empty(r: Rect2i) -> bool:
 
 
 func make_road(map: Map, road_model: TileModel, rect: Rect2i) -> void:
-	var keep_roads_fn := func(tile, prevmodel, x, y):
+	var keep_roads_fn := func(_tile, prevmodel, x, y):
 		# don't overwrite roads!
 		if game.game_tiles.is_road_model(prevmodel):
 			map.set_tile_model_at(x, y, prevmodel)
@@ -835,6 +835,15 @@ func make_road(map: Map, road_model: TileModel, rect: Rect2i) -> void:
 func place_door(map: Map, x: int, y: int, floor_model: TileModel, door: DoorWindow) -> void:
 	map.set_tile_model_at(x, y, floor_model)
 	map_object_place(map, x, y, door)
+
+
+## Bounds-safe decoration add: silently skips out-of-bounds positions.
+## Use this instead of map.get_tile_at(x, y).add_decoration(...) when x/y
+## may be at the map edge (e.g. door_x - 1, entry_fence_y + 1).
+func _safe_add_decoration(map: Map, x: int, y: int, deco: String) -> void:
+	var tile: Tile = map.get_tile_at(x, y)
+	if tile != null:
+		tile.add_decoration(deco)
 
 
 func place_door_if_no_object(map: Map, x: int, y: int, floor_model: TileModel, door: DoorWindow) -> void:
@@ -931,13 +940,13 @@ func make_shop_building(map: Map, b: Block) -> bool:
 	############################
 	tile_rectangle(map, game.game_tiles.floor_walkway(), b.rectangle.position.x, b.rectangle.position.y, b.rectangle.size.x, b.rectangle.size.y)
 	tile_rectangle(map, game.game_tiles.wall_stone(), b.building_rect.position.x, b.building_rect.position.y, b.building_rect.size.x, b.building_rect.size.y)
-	var inside_fn := func(tile, prevmodel, x, y): tile.is_inside = true
+	var inside_fn := func(tile, _prevmodel, _x, _y): tile.is_inside = true
 	tile_fill_rect(map, game.game_tiles.floor_tiles(), b.inside_rect, inside_fn)
 
 	#######################
 	# 2. Decide shop type
 	#######################
-	var shop_type: ShopType = _dice_roller.roll(ShopType.GENERAL_STORE, ShopType._COUNT)
+	var shop_type: ShopType = _dice_roller.roll(ShopType.GENERAL_STORE, ShopType._COUNT) as ShopType
 
 	################################################
 	# 3. Make sections alleys with displays.
@@ -1046,7 +1055,7 @@ func make_shop_building(map: Map, b: Block) -> bool:
 			# C# threw ArgumentOutOfRangeException.
 			push_error("BaseTownGenerator : unhandled shoptype")
 			return false
-	var shop_deco_fn := func(x, y): return shop_image if (map.get_map_object_at_xy(x, y) == null && count_adj_doors(map, x, y) >= 1) else null
+	var shop_deco_fn := func(x, y): return (shop_image as Variant) if (map.get_map_object_at_xy(x, y) == null && count_adj_doors(map, x, y) >= 1) else null
 	decorate_outside_walls(map, b.building_rect, shop_deco_fn)
 
 	# window?
@@ -1074,7 +1083,8 @@ func make_shop_building(map: Map, b: Block) -> bool:
 				return false
 		# check it is ok to make a window there.
 		var is_good_window_pos := true
-		if map.get_tile_at(wx, wy).model.is_walkable:
+		var window_tile: Tile = map.get_tile_at(wx, wy)
+		if window_tile == null or window_tile.model.is_walkable:
 			is_good_window_pos = false
 		# do it?
 		if is_good_window_pos:
@@ -1093,7 +1103,7 @@ func make_shop_building(map: Map, b: Block) -> bool:
 			return false
 		return map_obj.image_id == GameImages.OBJ_SHOP_SHELF \
 			&& _dice_roller.roll_chance(_params.item_in_shop_shelf_chance)
-	var shop_item_fn := func(pt): return make_random_shop_item(shop_type)
+	var shop_item_fn := func(_pt): return make_random_shop_item(shop_type)
 	items_drop(map, b.inside_rect, shelf_pos_fn, shop_item_fn)
 
 	#########
@@ -1192,7 +1202,7 @@ func make_char_agency(map: Map, b: Block) -> bool:
 	############################
 	tile_rectangle(map, game.game_tiles.floor_walkway(), b.rectangle.position.x, b.rectangle.position.y, b.rectangle.size.x, b.rectangle.size.y)
 	tile_rectangle(map, game.game_tiles.wall_char_office(), b.building_rect.position.x, b.building_rect.position.y, b.building_rect.size.x, b.building_rect.size.y)
-	var inside_logo_fn := func(tile, prevmodel, x, y):
+	var inside_logo_fn := func(tile, _prevmodel, _x, _y):
 		tile.is_inside = true
 		tile.add_decoration(GameImages.DECO_CHAR_FLOOR_LOGO)
 	tile_fill_rect(map, game.game_tiles.floor_office(), b.inside_rect, inside_logo_fn)
@@ -1246,7 +1256,7 @@ func make_char_agency(map: Map, b: Block) -> bool:
 
 	# add office image next to doors.
 	var office_image: String = GameImages.DECO_CHAR_OFFICE
-	var office_deco_fn := func(x, y): return office_image if (map.get_map_object_at_xy(x, y) == null && count_adj_doors(map, x, y) >= 1) else null
+	var office_deco_fn := func(x, y): return (office_image as Variant) if (map.get_map_object_at_xy(x, y) == null && count_adj_doors(map, x, y) >= 1) else null
 	decorate_outside_walls(map, b.building_rect, office_deco_fn)
 
 	###############
@@ -1265,7 +1275,7 @@ func make_char_agency(map: Map, b: Block) -> bool:
 		return make_obj_chair(GameImages.OBJ_CHAR_CHAIR)
 	map_object_fill_rect(map, b.inside_rect, agency_chair_fn)
 	# walls/pilars in the middle.
-	var poster_fn := func(tile, model, x, y):
+	var poster_fn := func(tile, _model, _x, _y):
 		tile.add_decoration(CHAR_POSTERS[_dice_roller.roll(0, CHAR_POSTERS.size())])
 	tile_fill_rect(map, game.game_tiles.wall_char_office(), Rect2i(b.inside_rect.position.x + b.inside_rect.size.x / 2 - 1, b.inside_rect.position.y + b.inside_rect.size.y / 2 - 1, 3, 2), poster_fn)
 
@@ -1299,7 +1309,7 @@ func make_char_office(map: Map, b: Block) -> bool:
 	############################
 	tile_rectangle(map, game.game_tiles.floor_walkway(), b.rectangle.position.x, b.rectangle.position.y, b.rectangle.size.x, b.rectangle.size.y)
 	tile_rectangle(map, game.game_tiles.wall_char_office(), b.building_rect.position.x, b.building_rect.position.y, b.building_rect.size.x, b.building_rect.size.y)
-	var inside_fn := func(tile, prevmodel, x, y): tile.is_inside = true
+	var inside_fn := func(tile, _prevmodel, _x, _y): tile.is_inside = true
 	tile_fill_rect(map, game.game_tiles.floor_office(), b.inside_rect, inside_fn)
 
 	#########################
@@ -1356,7 +1366,7 @@ func make_char_office(map: Map, b: Block) -> bool:
 
 	# add office image next to doors.
 	var office_image: String = GameImages.DECO_CHAR_OFFICE
-	var office_deco_fn := func(x, y): return office_image if (map.get_map_object_at_xy(x, y) == null && count_adj_doors(map, x, y) >= 1) else null
+	var office_deco_fn := func(x, y): return (office_image as Variant) if (map.get_map_object_at_xy(x, y) == null && count_adj_doors(map, x, y) >= 1) else null
 	decorate_outside_walls(map, b.building_rect, office_deco_fn)
 
 	# barricade entry doors.
@@ -1464,7 +1474,7 @@ func make_char_office(map: Map, b: Block) -> bool:
 				var adj_table_rect := Rect2i(table_pos.x - 1, table_pos.y - 1, 3, 3)
 				adj_table_rect = adj_table_rect.intersection(inside_room)
 				var not_table_fn := func(pt): return pt != table_pos
-				var chair_fn := func(pt): return make_obj_chair(GameImages.OBJ_CHAR_CHAIR)
+				var chair_fn := func(_pt): return make_obj_chair(GameImages.OBJ_CHAR_CHAIR)
 				map_object_place_in_good_position_rect(map, adj_table_rect, not_table_fn, _dice_roller, chair_fn)
 
 	###############
@@ -1480,7 +1490,7 @@ func make_char_office(map: Map, b: Block) -> bool:
 			if map_obj != null:
 				return false
 			return true
-		var char_item_fn := func(pt): return make_random_char_office_item()
+		var char_item_fn := func(_pt): return make_random_char_office_item()
 		items_drop(map, room_rect, office_floor_fn, char_item_fn)
 
 	#########
@@ -1518,7 +1528,7 @@ func make_park_building(map: Map, b: Block) -> bool:
 	##############################
 	# 2. Random trees and benches
 	##############################
-	var park_tree_fn := func(pt):
+	var park_tree_fn := func(_pt):
 		var place_tree: bool = _dice_roller.roll_chance(PARK_TREE_CHANCE)
 		if place_tree:
 			return make_obj_tree(GameImages.OBJ_TREE)
@@ -1526,7 +1536,7 @@ func make_park_building(map: Map, b: Block) -> bool:
 			return null
 	map_object_fill_rect(map, b.inside_rect, park_tree_fn)
 
-	var park_bench_fn := func(pt):
+	var park_bench_fn := func(_pt):
 		var place_bench: bool = _dice_roller.roll_chance(PARK_BENCH_CHANCE)
 		if place_bench:
 			return make_obj_bench(GameImages.OBJ_BENCH)
@@ -1560,7 +1570,7 @@ func make_park_building(map: Map, b: Block) -> bool:
 	# 4. Items
 	###########
 	var park_item_pos_fn := func(pt): return map.get_map_object_at(pt) == null && _dice_roller.roll_chance(PARK_ITEM_CHANCE)
-	var park_item_fn := func(pt): return make_random_park_item()
+	var park_item_fn := func(_pt): return make_random_park_item()
 	items_drop(map, b.inside_rect, park_item_pos_fn, park_item_fn)
 
 	#########
@@ -1580,7 +1590,7 @@ func make_park_building(map: Map, b: Block) -> bool:
 			var shed_x: int = _dice_roller.roll(b.inside_rect.position.x + 1, b.inside_rect.end.x - PARK_SHED_WIDTH)
 			var shed_y: int = _dice_roller.roll(b.inside_rect.position.y + 1, b.inside_rect.end.y - PARK_SHED_HEIGHT)
 			var shed_rect := Rect2i(shed_x, shed_y, PARK_SHED_WIDTH, PARK_SHED_HEIGHT)
-			var shed_inside_rect := Rect2i(shed_x + 1, shed_y + 1, PARK_SHED_WIDTH - 2, PARK_SHED_HEIGHT - 2)
+			var _shed_inside_rect := Rect2i(shed_x + 1, shed_y + 1, PARK_SHED_WIDTH - 2, PARK_SHED_HEIGHT - 2)
 
 			# clear everything but zones in shed location
 			clear_rectangle(map, shed_rect, false)
@@ -1597,7 +1607,7 @@ func make_park_shed_building(map: Map, base_zone_name: String, shed_building_rec
 
 	# build building & zone
 	tile_rectangle(map, game.game_tiles.wall_brick(), shed_building_rect.position.x, shed_building_rect.position.y, shed_building_rect.size.x, shed_building_rect.size.y)
-	var inside_fn := func(tile, prev_tile_model, x, y): tile.is_inside = true
+	var inside_fn := func(tile, _prev_tile_model, _x, _y): tile.is_inside = true
 	tile_fill_rect(map, game.game_tiles.floor_planks(), shed_inside_rect, inside_fn)
 	map.add_zone(make_unique_zone(base_zone_name, shed_building_rect))
 
@@ -1682,7 +1692,7 @@ func make_apartments_building(map: Map, b: Block) -> bool:
 	############################
 	tile_rectangle(map, game.game_tiles.floor_walkway(), b.rectangle.position.x, b.rectangle.position.y, b.rectangle.size.x, b.rectangle.size.y)
 	tile_rectangle(map, game.game_tiles.wall_brick(), b.building_rect.position.x, b.building_rect.position.y, b.building_rect.size.x, b.building_rect.size.y)
-	var inside_fn := func(tile, prevmodel, x, y): tile.is_inside = true
+	var inside_fn := func(tile, _prevmodel, _x, _y): tile.is_inside = true
 	tile_fill_rect(map, game.game_tiles.floor_planks(), b.inside_rect, inside_fn)
 
 	#########################
@@ -1833,7 +1843,7 @@ func make_vanilla_housing_building(map: Map, b: Block) -> bool:
 	############################
 	tile_rectangle(map, game.game_tiles.floor_walkway(), b.rectangle.position.x, b.rectangle.position.y, b.rectangle.size.x, b.rectangle.size.y)
 	tile_rectangle(map, game.game_tiles.wall_brick(), b.building_rect.position.x, b.building_rect.position.y, b.building_rect.size.x, b.building_rect.size.y)
-	var inside_fn := func(tile, prevmodel, x, y): tile.is_inside = true
+	var inside_fn := func(tile, _prevmodel, _x, _y): tile.is_inside = true
 	tile_fill_rect(map, game.game_tiles.floor_planks(), b.inside_rect, inside_fn)
 
 	######################
@@ -1851,13 +1861,15 @@ func make_vanilla_housing_building(map: Map, b: Block) -> bool:
 	var i_outside_room: int = -1
 	var outside_room: HouseOutsideRoomType = HouseOutsideRoomType.GARDEN  # C# init to _FIRST
 	if rooms_list.size() >= HOUSE_OUTSIDE_ROOM_NEED_MIN_ROOMS && _dice_roller.roll_chance(HOUSE_OUTSIDE_ROOM_CHANCE):
-		while true:
+		var outside_tries: int = 0
+		while outside_tries < 100:
+			outside_tries += 1
 			i_outside_room = _dice_roller.roll(0, rooms_list.size())
 			var r: Rect2i = rooms_list[i_outside_room]
 			if r.position.x == b.building_rect.position.x || r.end.x == b.building_rect.end.x \
 					|| r.position.y == b.building_rect.position.y || r.end.y == b.building_rect.end.y:
 				break
-		outside_room = _dice_roller.roll(HouseOutsideRoomType.GARDEN, HouseOutsideRoomType._COUNT)
+		outside_room = _dice_roller.roll(HouseOutsideRoomType.GARDEN, HouseOutsideRoomType._COUNT) as HouseOutsideRoomType
 
 	for i in rooms_list.size():
 		var room_rect: Rect2i = rooms_list[i]
@@ -2003,32 +2015,32 @@ func make_sewers_maintenance_building(map: Map, is_surface: bool, b: Block, link
 			door_x = b.building_rect.position.x + b.building_rect.size.x / 2
 			door_y = b.building_rect.position.y
 
-			map.get_tile_at(door_x - 1, door_y).add_decoration(GameImages.DECO_SEWERS_BUILDING)
-			map.get_tile_at(door_x + 1, door_y).add_decoration(GameImages.DECO_SEWERS_BUILDING)
+			_safe_add_decoration(map, door_x - 1, door_y, GameImages.DECO_SEWERS_BUILDING)
+			_safe_add_decoration(map, door_x + 1, door_y, GameImages.DECO_SEWERS_BUILDING)
 
 		1:  # south.
 			dig_direction = Direction.S
 			door_x = b.building_rect.position.x + b.building_rect.size.x / 2
 			door_y = b.building_rect.end.y - 1
 
-			map.get_tile_at(door_x - 1, door_y).add_decoration(GameImages.DECO_SEWERS_BUILDING)
-			map.get_tile_at(door_x + 1, door_y).add_decoration(GameImages.DECO_SEWERS_BUILDING)
+			_safe_add_decoration(map, door_x - 1, door_y, GameImages.DECO_SEWERS_BUILDING)
+			_safe_add_decoration(map, door_x + 1, door_y, GameImages.DECO_SEWERS_BUILDING)
 
 		2:  # west.
 			dig_direction = Direction.W
 			door_x = b.building_rect.position.x
 			door_y = b.building_rect.position.y + b.building_rect.size.y / 2
 
-			map.get_tile_at(door_x, door_y - 1).add_decoration(GameImages.DECO_SEWERS_BUILDING)
-			map.get_tile_at(door_x, door_y + 1).add_decoration(GameImages.DECO_SEWERS_BUILDING)
+			_safe_add_decoration(map, door_x, door_y - 1, GameImages.DECO_SEWERS_BUILDING)
+			_safe_add_decoration(map, door_x, door_y + 1, GameImages.DECO_SEWERS_BUILDING)
 
 		3:  # east.
 			dig_direction = Direction.E
 			door_x = b.building_rect.end.x - 1
 			door_y = b.building_rect.position.y + b.building_rect.size.y / 2
 
-			map.get_tile_at(door_x, door_y - 1).add_decoration(GameImages.DECO_SEWERS_BUILDING)
-			map.get_tile_at(door_x, door_y + 1).add_decoration(GameImages.DECO_SEWERS_BUILDING)
+			_safe_add_decoration(map, door_x, door_y - 1, GameImages.DECO_SEWERS_BUILDING)
+			_safe_add_decoration(map, door_x, door_y + 1, GameImages.DECO_SEWERS_BUILDING)
 
 		_:
 			# C# threw ArgumentOutOfRangeException.
@@ -2041,7 +2053,7 @@ func make_sewers_maintenance_building(map: Map, is_surface: bool, b: Block, link
 	# Hole/Ladder to sewers/surface.
 	##################################
 	# add exit.
-	map.get_tile_at(exit_position.x, exit_position.y).add_decoration(GameImages.DECO_SEWER_HOLE if is_surface else GameImages.DECO_SEWER_LADDER)
+	_safe_add_decoration(map, exit_position.x, exit_position.y, GameImages.DECO_SEWER_HOLE if is_surface else GameImages.DECO_SEWER_LADDER)
 	var exit := Map.Exit.new(linked_map, exit_position)
 	exit.is_an_ai_exit = true
 	map.set_exit_at(exit_position, exit)
@@ -2075,7 +2087,7 @@ func make_sewers_maintenance_building(map: Map, is_surface: bool, b: Block, link
 	if _dice_roller.roll_chance(33):
 		var furniture_walls_fn := func(pt): return count_adj_walls_xy(map, pt.x, pt.y) >= 3 && count_adj_doors(map, pt.x, pt.y) == 0
 		# bed.
-		var bed_fn := func(pt): return make_obj_bed(GameImages.OBJ_BED)
+		var bed_fn := func(_pt): return make_obj_bed(GameImages.OBJ_BED)
 		map_object_place_in_good_position_rect(map, b.inside_rect, furniture_walls_fn, _dice_roller, bed_fn)
 
 		# fridge + food.
@@ -2135,8 +2147,8 @@ func make_subway_station_building(map: Map, is_surface: bool, b: Block, linked_m
 			entry_fence_y = b.building_rect.position.y
 
 			if is_surface:
-				map.get_tile_at(entry_fence_x - 1, entry_fence_y).add_decoration(GameImages.DECO_SUBWAY_BUILDING)
-				map.get_tile_at(entry_fence_x + 1, entry_fence_y).add_decoration(GameImages.DECO_SUBWAY_BUILDING)
+				_safe_add_decoration(map, entry_fence_x - 1, entry_fence_y, GameImages.DECO_SUBWAY_BUILDING)
+				_safe_add_decoration(map, entry_fence_x + 1, entry_fence_y, GameImages.DECO_SUBWAY_BUILDING)
 
 		1:  # south.
 			dig_direction = Direction.S
@@ -2144,8 +2156,8 @@ func make_subway_station_building(map: Map, is_surface: bool, b: Block, linked_m
 			entry_fence_y = b.building_rect.end.y - 1
 
 			if is_surface:
-				map.get_tile_at(entry_fence_x - 1, entry_fence_y).add_decoration(GameImages.DECO_SUBWAY_BUILDING)
-				map.get_tile_at(entry_fence_x + 1, entry_fence_y).add_decoration(GameImages.DECO_SUBWAY_BUILDING)
+				_safe_add_decoration(map, entry_fence_x - 1, entry_fence_y, GameImages.DECO_SUBWAY_BUILDING)
+				_safe_add_decoration(map, entry_fence_x + 1, entry_fence_y, GameImages.DECO_SUBWAY_BUILDING)
 
 		2:  # west.
 			dig_direction = Direction.W
@@ -2153,8 +2165,8 @@ func make_subway_station_building(map: Map, is_surface: bool, b: Block, linked_m
 			entry_fence_y = b.building_rect.position.y + b.building_rect.size.y / 2
 
 			if is_surface:
-				map.get_tile_at(entry_fence_x, entry_fence_y - 1).add_decoration(GameImages.DECO_SUBWAY_BUILDING)
-				map.get_tile_at(entry_fence_x, entry_fence_y + 1).add_decoration(GameImages.DECO_SUBWAY_BUILDING)
+				_safe_add_decoration(map, entry_fence_x, entry_fence_y - 1, GameImages.DECO_SUBWAY_BUILDING)
+				_safe_add_decoration(map, entry_fence_x, entry_fence_y + 1, GameImages.DECO_SUBWAY_BUILDING)
 
 		3:  # east.
 			dig_direction = Direction.E
@@ -2162,8 +2174,8 @@ func make_subway_station_building(map: Map, is_surface: bool, b: Block, linked_m
 			entry_fence_y = b.building_rect.position.y + b.building_rect.size.y / 2
 
 			if is_surface:
-				map.get_tile_at(entry_fence_x, entry_fence_y - 1).add_decoration(GameImages.DECO_SUBWAY_BUILDING)
-				map.get_tile_at(entry_fence_x, entry_fence_y + 1).add_decoration(GameImages.DECO_SUBWAY_BUILDING)
+				_safe_add_decoration(map, entry_fence_x, entry_fence_y - 1, GameImages.DECO_SUBWAY_BUILDING)
+				_safe_add_decoration(map, entry_fence_x, entry_fence_y + 1, GameImages.DECO_SUBWAY_BUILDING)
 
 		_:
 			# C# threw ArgumentOutOfRangeException.
@@ -2179,7 +2191,7 @@ func make_subway_station_building(map: Map, is_surface: bool, b: Block, linked_m
 	# add exits.
 	for ex in range(exit_position.x - 1, exit_position.x + 2):
 		var this_exit_pos := Vector2i(ex, exit_position.y)
-		map.get_tile_at(this_exit_pos.x, this_exit_pos.y).add_decoration(GameImages.DECO_STAIRS_DOWN if is_surface else GameImages.DECO_STAIRS_UP)
+		_safe_add_decoration(map, this_exit_pos.x, this_exit_pos.y, GameImages.DECO_STAIRS_DOWN if is_surface else GameImages.DECO_STAIRS_UP)
 		var exit := Map.Exit.new(linked_map, this_exit_pos)
 		exit.is_an_ai_exit = true
 		map.set_exit_at(this_exit_pos, exit)
@@ -2268,8 +2280,8 @@ func make_subway_station_building(map: Map, is_surface: bool, b: Block, linked_m
 
 		# add door with signs.
 		place_door(map, power_room_entry.x, power_room_entry.y, game.game_tiles.floor_concrete(), make_obj_iron_door())
-		map.get_tile_at(power_room_entry.x, power_room_entry.y - 1).add_decoration(GameImages.DECO_POWER_SIGN_BIG)
-		map.get_tile_at(power_room_entry.x, power_room_entry.y + 1).add_decoration(GameImages.DECO_POWER_SIGN_BIG)
+		_safe_add_decoration(map, power_room_entry.x, power_room_entry.y - 1, GameImages.DECO_POWER_SIGN_BIG)
+		_safe_add_decoration(map, power_room_entry.x, power_room_entry.y + 1, GameImages.DECO_POWER_SIGN_BIG)
 
 		# add power generators along wall.
 		var powergen_fn := func(pt):
@@ -2318,8 +2330,8 @@ func make_rooms_plan(map: Map, list: Array, rect: Rect2i, min_rooms_x_size: int,
 	############
 	# +N to account for the road ring.
 	var quads := quad_split(rect, min_rooms_x_size, min_rooms_y_size)
-	var split_x: int = quads.split_x
-	var split_y: int = quads.split_y
+	var _split_x: int = quads.split_x
+	var _split_y: int = quads.split_y
 	var top_left: Rect2i = quads.top_left
 	var top_right: Rect2i = quads.top_right
 	var bottom_left: Rect2i = quads.bottom_left
@@ -2359,7 +2371,7 @@ func make_housing_room(map: Map, room_rect: Rect2i, floor_model: TileModel, wall
 	# 1. Floor & Walls
 	###################
 	tile_fill_rect(map, floor_model, room_rect)
-	var keep_doors_fn := func(tile, prevmodel, x, y):
+	var keep_doors_fn := func(_tile, _prevmodel, x, y):
 		# if we have a door there, don't put a wall!
 		if map.get_map_object_at_xy(x, y) != null:
 			map.set_tile_model_at(x, y, floor_model)
@@ -2454,7 +2466,7 @@ func fill_housing_room_contents(map: Map, room_rect: Rect2i, role: int = -1) -> 
 					var adj_table_rect := Rect2i(pt.x - 1, pt.y - 1, 3, 3)
 					adj_table_rect = adj_table_rect.intersection(inside_room)
 					var chair_pos_fn := func(pt2): return pt2 != pt && count_adj_doors(map, pt2.x, pt2.y) == 0 && count_adj_map_objects(map, pt.x, pt.y) < 5  # alpha10.1 not cramped,
-					var chair_fn := func(pt2): return make_obj_chair(GameImages.OBJ_CHAIR)
+					var chair_fn := func(_pt2): return make_obj_chair(GameImages.OBJ_CHAIR)
 					map_object_place_in_good_position_rect(map, adj_table_rect, chair_pos_fn, _dice_roller, chair_fn)
 
 					# table.
@@ -2466,7 +2478,7 @@ func fill_housing_room_contents(map: Map, room_rect: Rect2i, role: int = -1) -> 
 			var nb_drawers: int = _dice_roller.roll(1, 3)
 			for i in nb_drawers:
 				var drawer_walls_fn := func(pt): return count_adj_walls_xy(map, pt.x, pt.y) >= 2 && count_adj_doors(map, pt.x, pt.y) == 0 && count_adj_map_objects(map, pt.x, pt.y) < 5  # alpha10.1 not cramped,
-				var drawer_fn := func(pt): return make_obj_drawer(GameImages.OBJ_DRAWER)
+				var drawer_fn := func(_pt): return make_obj_drawer(GameImages.OBJ_DRAWER)
 				map_object_place_in_good_position_rect(map, inside_room, drawer_walls_fn, _dice_roller, drawer_fn)
 
 		# 3. Kitchen? 8-9 = 20%
@@ -2483,7 +2495,7 @@ func fill_housing_room_contents(map: Map, room_rect: Rect2i, role: int = -1) -> 
 				# one chair around.
 				var adj_table_rect := Rect2i(pt.x - 1, pt.y - 1, 3, 3)
 				var kitchen_chair_pos_fn := func(pt2): return pt2 != pt && count_adj_doors(map, pt2.x, pt2.y) == 0
-				var kitchen_chair_fn := func(pt2): return make_obj_chair(GameImages.OBJ_CHAIR)
+				var kitchen_chair_fn := func(_pt2): return make_obj_chair(GameImages.OBJ_CHAIR)
 				map_object_place_in_good_position_rect(map, adj_table_rect, kitchen_chair_pos_fn, _dice_roller, kitchen_chair_fn)
 
 				# table.
@@ -2874,7 +2886,7 @@ static var POSTERS: Array = [GameImages.DECO_POSTERS1, GameImages.DECO_POSTERS2]
 
 
 func decorate_outside_walls_with_posters(map: Map, rect: Rect2i, chance_per_wall: int) -> void:
-	var poster_fn := func(x, y):
+	var poster_fn := func(_x, _y):
 		if _dice_roller.roll_chance(chance_per_wall):
 			return POSTERS[_dice_roller.roll(0, POSTERS.size())]
 		else:
@@ -2886,7 +2898,7 @@ static var TAGS: Array = [GameImages.DECO_TAGS1, GameImages.DECO_TAGS2, GameImag
 
 
 func decorate_outside_walls_with_tags(map: Map, rect: Rect2i, chance_per_wall: int) -> void:
-	var tag_fn := func(x, y):
+	var tag_fn := func(_x, _y):
 		if _dice_roller.roll_chance(chance_per_wall):
 			return TAGS[_dice_roller.roll(0, TAGS.size())]
 		else:
@@ -2917,19 +2929,21 @@ func generate_house_basement_map(map: Map, house_block: Block) -> Map:
 	# NOTE: C# `map.Seed << 1 + rect.Left * map.Height + rect.Top` parses as
 	# `map.Seed << (1 + rect.Left * map.Height + rect.Top)` (shift has lower
 	# precedence than + in C#); GDScript has the same precedence, kept as-is.
-	var seed: int = map.seed << 1 + rect.position.x * map.height + rect.position.y
-	var basement := Map.new(seed, "basement%d%d@%d-%d" % [_params.district.world_position.x, _params.district.world_position.y, rect.position.x + rect.size.x / 2, rect.position.y + rect.size.y / 2], rect.size.x, rect.size.y)
+	var _seed: int = map.seed << 1 + rect.position.x * map.height + rect.position.y
+	var basement := Map.new(_seed, "basement%d%d@%d-%d" % [_params.district.world_position.x, _params.district.world_position.y, rect.position.x + rect.size.x / 2, rect.position.y + rect.size.y / 2], rect.size.x, rect.size.y)
 	basement.lighting = Map.Lighting.DARKNESS
 	basement.add_zone(make_unique_zone("basement", basement.rect))
 
 	# enclose.
-	var inside_fn := func(tile, model, x, y): tile.is_inside = true
+	var inside_fn := func(tile, _model, _x, _y): tile.is_inside = true
 	tile_fill_all(basement, game.game_tiles.floor_concrete(), inside_fn)
 	tile_rectangle(basement, game.game_tiles.wall_brick(), 0, 0, basement.width, basement.height)
 
 	# link to house with stairs.
 	var surface_stairs := Vector2i.ZERO
-	while true:
+	var stairs_tries: int = 0
+	while stairs_tries < 200:
+		stairs_tries += 1
 		# roll.
 		surface_stairs.x = _dice_roller.roll(rect.position.x, rect.end.x)
 		surface_stairs.y = _dice_roller.roll(rect.position.y, rect.end.y)
@@ -3064,7 +3078,7 @@ func generate_unique_map_char_underground(surface_map: Map, office_zone: Zone) -
 	underground.lighting = Map.Lighting.DARKNESS
 	underground.is_secret = true
 	# fill & enclose.
-	var inside_fn := func(tile, model, x, y): tile.is_inside = true
+	var inside_fn := func(tile, _model, _x, _y): tile.is_inside = true
 	tile_fill_all(underground, game.game_tiles.floor_office(), inside_fn)
 	tile_rectangle(underground, game.game_tiles.wall_char_office(), 0, 0, underground.width, underground.height)
 
@@ -3075,9 +3089,13 @@ func generate_unique_map_char_underground(surface_map: Map, office_zone: Zone) -
 	# - iron door, barricade the door.
 	var room_zone = null  # Zone
 	var surface_exit := Vector2i.ZERO
-	while true:  # loop until found.
+	var outer_tries: int = 0
+	while outer_tries < 100:  # loop until found.
+		outer_tries += 1
 		# find a random room.
-		while room_zone == null:
+		var room_tries: int = 0
+		while room_zone == null and room_tries < 200:
+			room_tries += 1
 			var x: int = _dice_roller.roll(office_zone.bounds.position.x, office_zone.bounds.end.x)
 			var y: int = _dice_roller.roll(office_zone.bounds.position.y, office_zone.bounds.end.y)
 			var zones_here: Array[Zone] = surface_map.get_zones_at(x, y)
@@ -3087,6 +3105,8 @@ func generate_unique_map_char_underground(surface_map: Map, office_zone: Zone) -
 				if z.name.contains("room"):
 					room_zone = z
 					break
+		if room_zone == null:
+			continue
 
 		# find somewhere walkable inside.
 		var found_surface_exit := false
@@ -3341,7 +3361,7 @@ func make_char_storage_room(map: Map, room_rect: Rect2i) -> void:
 
 func make_char_living_room(map: Map, room_rect: Rect2i) -> void:
 	# Replace floor with wood with painted logo.
-	var logo_fn := func(tile, model, x, y): tile.add_decoration(GameImages.DECO_CHAR_FLOOR_LOGO)
+	var logo_fn := func(tile, _model, _x, _y): tile.add_decoration(GameImages.DECO_CHAR_FLOOR_LOGO)
 	tile_fill_rect(map, game.game_tiles.floor_planks(), room_rect, logo_fn)
 
 	# Objects.
@@ -3503,8 +3523,8 @@ func generate_police_station(surface_map: Map, police_block: Block) -> Vector2i:
 
 	# Entrance to the south with police signs.
 	var entry_door_pos := Vector2i(police_block.building_rect.position.x + police_block.building_rect.size.x / 2, police_block.building_rect.end.y - 1)
-	surface_map.get_tile_at(entry_door_pos.x - 1, entry_door_pos.y).add_decoration(GameImages.DECO_POLICE_STATION)
-	surface_map.get_tile_at(entry_door_pos.x + 1, entry_door_pos.y).add_decoration(GameImages.DECO_POLICE_STATION)
+	_safe_add_decoration(surface_map, entry_door_pos.x - 1, entry_door_pos.y, GameImages.DECO_POLICE_STATION)
+	_safe_add_decoration(surface_map, entry_door_pos.x + 1, entry_door_pos.y, GameImages.DECO_POLICE_STATION)
 
 	# Entry hall.
 	# C# Rectangle.FromLTRB(left, top, right, bottom) -> Rect2i(left, top, right-left, bottom-top)
@@ -3530,7 +3550,7 @@ func generate_police_station(surface_map: Map, police_block: Block) -> Vector2i:
 	return stairs_to_level1
 
 
-func generate_police_station_offices_level(surface_map: Map, police_block: Block, exit_pos: Vector2i) -> Map:
+func generate_police_station_offices_level(surface_map: Map, _police_block: Block, _exit_pos: Vector2i) -> Map:
 	################
 	# 1. Create map.
 	# 2. Floor plan.
@@ -3538,8 +3558,8 @@ func generate_police_station_offices_level(surface_map: Map, police_block: Block
 	################
 
 	# 1. Create map.
-	var seed: int = (surface_map.seed << 1) ^ surface_map.seed
-	var map := Map.new(seed, "Police Station - Offices", 20, 20)
+	var _seed: int = (surface_map.seed << 1) ^ surface_map.seed
+	var map := Map.new(_seed, "Police Station - Offices", 20, 20)
 	map.lighting = Map.Lighting.DARKNESS
 	var inside_fn := func(pt): map.get_tile_at_p(pt).is_inside = true
 	do_for_each_tile(map, map.rect, inside_fn)
@@ -3615,11 +3635,11 @@ func generate_police_station_offices_level(surface_map: Map, police_block: Block
 
 			# add furniture : 1 table, 2 chairs.
 			var office_walk_fn := func(pt): return map.is_walkable(pt.x, pt.y) && count_adj_doors(map, pt.x, pt.y) == 0
-			var table_fn := func(pt): return make_obj_table(GameImages.OBJ_TABLE)
+			var table_fn := func(_pt): return make_obj_table(GameImages.OBJ_TABLE)
 			map_object_place_in_good_position_rect(map, in_room_rect, office_walk_fn, _dice_roller, table_fn)
-			var chair_fn := func(pt): return make_obj_chair(GameImages.OBJ_CHAIR)
+			var chair_fn := func(_pt): return make_obj_chair(GameImages.OBJ_CHAIR)
 			map_object_place_in_good_position_rect(map, in_room_rect, office_walk_fn, _dice_roller, chair_fn)
-			var chair_fn2 := func(pt): return make_obj_chair(GameImages.OBJ_CHAIR)
+			var chair_fn2 := func(_pt): return make_obj_chair(GameImages.OBJ_CHAIR)
 			map_object_place_in_good_position_rect(map, in_room_rect, office_walk_fn, _dice_roller, chair_fn2)
 
 			# zone.
@@ -3656,8 +3676,8 @@ func generate_police_station_jails_level(surface_map: Map) -> Map:
 	##################
 
 	# 1. Create map.
-	var seed: int = (surface_map.seed << 1) ^ surface_map.seed
-	var map := Map.new(seed, "Police Station - Jails", 22, 6)
+	var _seed: int = (surface_map.seed << 1) ^ surface_map.seed
+	var map := Map.new(_seed, "Police Station - Jails", 22, 6)
 	map.lighting = Map.Lighting.DARKNESS
 	var inside_fn := func(pt): map.get_tile_at_p(pt).is_inside = true
 	do_for_each_tile(map, map.rect, inside_fn)
@@ -3844,8 +3864,8 @@ func generate_hospital_entry_hall(surface_map: Map, block: Block) -> void:
 	# 2 entrances to the south with signs.
 	var entry_right_door_pos := Vector2i(block.building_rect.position.x + block.building_rect.size.x / 2, block.building_rect.end.y - 1)
 	var entry_left_door_pos := Vector2i(entry_right_door_pos.x - 1, entry_right_door_pos.y)
-	surface_map.get_tile_at(entry_left_door_pos.x - 1, entry_left_door_pos.y).add_decoration(GameImages.DECO_HOSPITAL)
-	surface_map.get_tile_at(entry_right_door_pos.x + 1, entry_right_door_pos.y).add_decoration(GameImages.DECO_HOSPITAL)
+	_safe_add_decoration(surface_map, entry_left_door_pos.x - 1, entry_left_door_pos.y, GameImages.DECO_HOSPITAL)
+	_safe_add_decoration(surface_map, entry_right_door_pos.x + 1, entry_right_door_pos.y, GameImages.DECO_HOSPITAL)
 
 	# Entry hall = whole building.
 	# C# Rectangle.FromLTRB(left, top, right, bottom) -> Rect2i(left, top, right-left, bottom-top)
@@ -4054,14 +4074,14 @@ func generate_hospital_patients(_seed: int) -> Map:
 	return map
 
 
-func generate_hospital_storage(seed: int) -> Map:
+func generate_hospital_storage(_seed: int) -> Map:
 	##################
 	# 1. Create map.
 	# 2. Floor plan.
 	##################
 
 	# 1. Create map.
-	var map := Map.new(seed, "Hospital - Storage", 51, 16)
+	var map := Map.new(_seed, "Hospital - Storage", 51, 16)
 	map.lighting = Map.Lighting.DARKNESS
 	var inside_fn := func(pt): map.get_tile_at_p(pt).is_inside = true
 	do_for_each_tile(map, map.rect, inside_fn)
@@ -4139,7 +4159,7 @@ func generate_hospital_storage(seed: int) -> Map:
 	return map
 
 
-func generate_hospital_power(seed: int) -> Map:
+func generate_hospital_power(_seed: int) -> Map:
 	################
 	# 1. Create map.
 	# 2. Floor plan.
@@ -4147,7 +4167,7 @@ func generate_hospital_power(seed: int) -> Map:
 	################
 
 	# 1. Create map.
-	var map := Map.new(seed, "Hospital - Power", 10, 10)
+	var map := Map.new(_seed, "Hospital - Power", 10, 10)
 	map.lighting = Map.Lighting.DARKNESS
 	var inside_fn := func(pt): map.get_tile_at_p(pt).is_inside = true
 	do_for_each_tile(map, map.rect, inside_fn)
@@ -4188,7 +4208,7 @@ func generate_hospital_power(seed: int) -> Map:
 	return map
 
 
-func create_new_hospital_patient(spawn_time: int) -> Actor:
+func create_new_hospital_patient(_spawn_time: int) -> Actor:
 	# decide model.
 	var model: ActorModel = game.game_actors.male_civilian() if rules.roll(0, 2) == 0 else game.game_actors.female_civilian()
 
@@ -4209,7 +4229,7 @@ func create_new_hospital_patient(spawn_time: int) -> Actor:
 	return patient
 
 
-func create_new_hospital_nurse(spawn_time: int) -> Actor:
+func create_new_hospital_nurse(_spawn_time: int) -> Actor:
 	# create.
 	var nurse: Actor = game.game_actors.female_civilian().create_numbered_name(game.game_factions.the_civilians(), 0)
 	skin_naked_human(_dice_roller, nurse)
@@ -4231,7 +4251,7 @@ func create_new_hospital_nurse(spawn_time: int) -> Actor:
 	return nurse
 
 
-func create_new_hospital_doctor(spawn_time: int) -> Actor:
+func create_new_hospital_doctor(_spawn_time: int) -> Actor:
 	# create.
 	var doctor: Actor = game.game_actors.male_civilian().create_numbered_name(game.game_factions.the_civilians(), 0)
 	skin_naked_human(_dice_roller, doctor)
@@ -4495,7 +4515,7 @@ func create_new_survivor(spawn_time: int) -> Actor:
 	return survivor
 
 
-func create_new_naked_human(spawn_time: int, items_to_carry: int, skills: int) -> Actor:
+func create_new_naked_human(spawn_time: int, _items_to_carry: int, _skills: int) -> Actor:
 	# decide model.
 	var model: ActorModel = game.game_actors.male_civilian() if rules.roll(0, 2) == 0 else game.game_actors.female_civilian()
 

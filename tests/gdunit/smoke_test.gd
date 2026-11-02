@@ -102,7 +102,7 @@ func test_simulate_30_turns() -> void:
 
 class _RecordingUI extends HeadlessUI:
 	var tint_draws: Array = []
-	func ui_draw_image_tint(image_id: String, gx: int, gy: int, tint: Color) -> void:
+	func ui_draw_image_tint(image_id: String, gx: int, gy: int, _tint: Color) -> void:
 		tint_draws.append({"id": image_id, "gx": gx, "gy": gy})
 	func tint_draws_at(gx: int, gy: int) -> Array:
 		var out: Array = []

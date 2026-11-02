@@ -39,12 +39,12 @@ var _dummy_percept_last_items_saw: Percept = null
 func take_control(actor: Actor) -> void:
 	super(actor)
 
-	_exploration = ExplorationData.new(EXPLORATION_LOCATIONS, EXPLORATION_ZONES)
+	_exploration = _track_exploration(ExplorationData.new(EXPLORATION_LOCATIONS, EXPLORATION_ZONES))
 
 
 func create_sensors() -> void:
 	_los_sensor = LOSSensor.new(LOSSensor.SensingFilter.ACTORS | LOSSensor.SensingFilter.ITEMS)
-	_memorized_sensor = MemorizedSensor.new(_los_sensor, LOS_MEMORY)
+	_memorized_sensor = _track_memorized_sensor(MemorizedSensor.new(_los_sensor, LOS_MEMORY))
 
 
 func update_sensors(game: RogueGame) -> Array[Percept]:
@@ -52,6 +52,8 @@ func update_sensors(game: RogueGame) -> Array[Percept]:
 
 
 func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
+	if not has_valid_location():
+		return null
 	var fov = _los_sensor.fov
 	var map_percepts = filter_same_map(game, percepts)
 
@@ -107,7 +109,7 @@ func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
 	var check_our_leader: bool = _actor.has_leader and not dont_follow_leader
 	var see_leader: bool = check_our_leader && fov.has(_actor.leader.location.position)
 	var is_leader_fighting: bool = check_our_leader && is_adjacent_to_enemy(game, _actor.leader)
-	var is_courageous: bool = not game.rules.is_actor_tired(_actor)
+	var _is_courageous: bool = not game.rules.is_actor_tired(_actor)
 
 	# exploration.
 	_exploration.update(_actor.location)

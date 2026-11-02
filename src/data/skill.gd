@@ -96,10 +96,10 @@ func dec_or_remove_skill(id: int) -> void:
 
 # --- save system ---
 func serialize() -> Dictionary:
-	var skills := []
+	var _skills := []
 	for sk in table.values():
-		skills.append({"id": sk.id, "level": sk.level})
-	return {"skills": skills}
+		_skills.append({"id": sk.id, "level": sk.level})
+	return {"skills": _skills}
 
 
 static func deserialize_data(data: Dictionary) -> SkillTable:

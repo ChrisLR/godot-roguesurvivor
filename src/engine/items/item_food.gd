@@ -26,7 +26,7 @@ func _init(p_model: ItemModel, p_best_before: int = -1) -> void:
 func _serialize_fields(d: Dictionary) -> void:
 	d["nutrition"] = nutrition
 	d["is_perishable"] = is_perishable
-	d["best_before"] = best_before.serialize() if best_before != null else null
+	d["best_before"] = (best_before.serialize() as Variant) if best_before != null else null
 
 
 func _deserialize_fields(d: Dictionary) -> void:

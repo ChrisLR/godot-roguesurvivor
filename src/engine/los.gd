@@ -9,7 +9,7 @@ extends RefCounted
 ## Port of AsymetricBresenhamTrace(maxSteps, ...).
 ## line: if not null, points forming the segment are added, source included.
 ## fn: called per plotted point, return false to stop the trace.
-static func asymetric_bresenham_trace(max_steps: int, map: Map, x_from: int, y_from: int, x_to: int, y_to: int, line, fn: Callable) -> bool:
+static func asymetric_bresenham_trace(max_steps: int, _map: Map, x_from: int, y_from: int, x_to: int, y_to: int, line, fn: Callable) -> bool:
 	# From Roguebasin
 	# http://roguebasin.roguelikedevelopment.org/index.php?title=Bresenham%27s_Line_Algorithm
 
@@ -116,7 +116,7 @@ static func can_trace_fire_line(from_location: Location, to_position: Vector2i, 
 	var map: Map = from_location.map
 	var start := from_location.position
 	var goal := to_position
-	var fire_line_clear := true
+	var fire_line_clear := [true]
 
 	asymetric_bresenham_trace(max_range,
 		map,
@@ -129,17 +129,17 @@ static func can_trace_fire_line(from_location: Location, to_position: Vector2i, 
 			if x == goal.x and y == goal.y:
 				return true
 			if map.is_blocking_fire(x, y):
-				fire_line_clear = false
+				fire_line_clear[0] = false
 			return true)
 
-	return fire_line_clear
+	return fire_line_clear[0]
 
 
 static func can_trace_throw_line(from_location: Location, to_position: Vector2i, max_range: int, line) -> bool:
 	var map: Map = from_location.map
 	var start := from_location.position
 	var goal := to_position
-	var throw_line_clear := true
+	var throw_line_clear := [true]
 
 	# check line.
 	asymetric_bresenham_trace(max_range,
@@ -153,15 +153,15 @@ static func can_trace_throw_line(from_location: Location, to_position: Vector2i,
 			if x == goal.x and y == goal.y:
 				return true
 			if map.is_blocking_throw(x, y):
-				throw_line_clear = false
+				throw_line_clear[0] = false
 			return true)
 
 	# we can't throw on something blocking, no matter the rest of the line is clear.
 	if map.is_blocking_throw(to_position.x, to_position.y):
-		throw_line_clear = false
+		throw_line_clear[0] = false
 
 	# done.
-	return throw_line_clear
+	return throw_line_clear[0]
 
 
 ## Asymetric bresenham : use the fact we are tracing FROM to TO to add visible

@@ -698,7 +698,8 @@ func make_item_biker_gang_jacket(gang_id: int) -> Item:
 		GameGangs.IDs.BIKER_HELLS_SOULS:
 			return ItemBodyArmor.new(game.game_items.hells_souls_jacket())
 		_:
-			assert(false, "unhandled biker gang")
+			# C# threw; don't hard-crash debug builds, fall back to null.
+			push_error("unhandled biker gang %s" % gang_id)
 			return null
 
 
@@ -728,7 +729,9 @@ func make_item_spray_paint() -> Item:
 		2: paint_model = game.game_items.spray_paint3()
 		3: paint_model = game.game_items.spray_paint4()
 		_:
-			assert(false, "unhandled roll")
+			# C# threw; don't hard-crash debug builds, fall back to paint1.
+			push_error("unhandled roll %d" % roll)
+			paint_model = game.game_items.spray_paint1()
 
 	return ItemSprayPaint.new(paint_model)
 

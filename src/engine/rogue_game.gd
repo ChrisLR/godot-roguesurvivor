@@ -264,7 +264,7 @@ var VERB_WAKE_UP := Verb.new("wake up", "wakes up")
 
 # Port of the Overlay inner classes (RogueGame.cs lines 452-644).
 class Overlay:
-	func draw(p_ui: IRogueUI) -> void:
+	func draw(_p_ui: IRogueUI) -> void:
 		assert(false, "abstract method")
 
 
@@ -438,7 +438,7 @@ var hint_available_overlay = null  # alpha10: OverlayPopup
 var town_generator = null  # BaseTownGenerator
 
 var played_intro: bool = false
-var music_manager = null  # IMusicManager
+var music_manager: IMusicManager = NullMusicManager.new()
 
 var char_gen = null  # CharGen
 
@@ -1572,7 +1572,7 @@ func handle_hi_scores(save_to_textfile: bool) -> void:
 			str(i + 1).lpad(3), truncate_string(hi.name, 25).rpad(25),
 			str(hi.total_points).lpad(6), str(hi.difficulty_percent).lpad(3),
 			str(hi.survival_points).lpad(6), str(hi.kill_points).lpad(6), str(hi.achievement_points).lpad(6),
-			str(WorldTime.new(hi.turn_survived)).lpad(14), time_span_to_string(hi.playing_time)]
+			str(WorldTime.new(hi.turn_survived)).lpad(14), time_span_to_string(int(hi.playing_time))]
 		ui.ui_draw_string_bold(rank_color, line, 0, gy)
 		gy += BOLD_LINE_SPACING
 		ui.ui_draw_string_bold(rank_color, "     | %s." % hi.skills_description, 0, gy)
@@ -1737,7 +1737,7 @@ func handle_credits() -> void:
 
 # alpha10 removed mention of mode and mentioned which options are always off
 # in certain modes (vintage)
-func handle_options(ingame: bool) -> void:
+func handle_options(_ingame: bool) -> void:
 	var prev_options: GameOptions = options
 
 	var list: Array = [
@@ -2413,11 +2413,11 @@ func next_map_turn(map: Map, sim: int) -> void:
 					for c in try_zombify_corpses:
 						# only one actor per tile!
 						if map.get_actor_at(c.position) == null:
-							var corpse_state: float = c.hit_points / float(c.max_hit_points)
-							var zombified_hp: int = int(corpse_state * rules.actor_max_hps(c.dead_guy))
+							var corpse_state: float = 0.0 if c.max_hit_points <= 0 else c.hit_points / float(c.max_hit_points)
+							var _zombified_hp: int = int(corpse_state * rules.actor_max_hps(c.dead_guy))
 							zombified_corpses.append(c)
 							# zombified_hp computed above; Zombify side effect spawns the actor
-							var zombified: Actor = zombify(null, c.dead_guy, false)
+							var _zombified: Actor = zombify(null, c.dead_guy, false)
 
 							if is_visible_to_player(map, c.position):
 								add_message(Message.new("The corpse of %s rise again!!" % [c.dead_guy.name], map.local_time.turn_counter, Color.RED))
@@ -2798,13 +2798,16 @@ func next_map_turn(map: Map, sim: int) -> void:
 				has_exploded_something = false
 
 				# on ground.
+				# Iterate over snapshots: do_blast() can remove ground inventories
+				# and chain-react, mutating aux_ground_items_list and inv.items.
 				if not has_exploded_something:
-					for ground_inv in map.aux_ground_items_list:
+					for ground_inv in map.aux_ground_items_list.duplicate():
 						var pos: Variant = map.get_ground_inventory_position(ground_inv)
 						if pos == null:
 							push_error("explosives : GetGroundInventoryPosition returned null point")
+							continue
 
-						for it in ground_inv.items:
+						for it in ground_inv.items.duplicate():
 							var primed: ItemPrimedExplosive = it as ItemPrimedExplosive
 							if primed == null:
 								continue
@@ -2820,13 +2823,15 @@ func next_map_turn(map: Map, sim: int) -> void:
 							break
 
 				# on actors.
+				# Iterate over a snapshot: do_blast() -> kill_actor() -> remove_actor()
+				# mutates map.actors_list mid-loop.
 				if not has_exploded_something:
-					for actor in map.actors_list:
+					for actor in map.actors_list.duplicate():
 						var inv: Inventory = actor.inventory
 						if inv == null or inv.is_empty:
 							continue
 
-						for it in inv.items:
+						for it in inv.items.duplicate():
 							var primed: ItemPrimedExplosive = it as ItemPrimedExplosive
 							if primed == null:
 								continue
@@ -3123,8 +3128,8 @@ func play_unique_actor_music_and_message(unique: Session.UniqueActor, has_arrive
 		if has_arrived:
 			add_message(make_player_centric_message("Seems to come from", unique.the_actor.location.position))
 		else:
-			# TODO: OverlayRect highlight + MapToScreen + AddOverlay not ported yet (RogueGame.cs lines 452-644)
-			pass
+			highlight_overlay = OverlayRect.new(Color.PINK, Rect2i(map_to_screen(unique.the_actor.location.position.x, unique.the_actor.location.position.y), Vector2i(TILE_SIZE, TILE_SIZE)))
+			add_overlay(highlight_overlay)
 		if not player.is_bot_player:
 			add_message_press_enter()
 			clear_messages()
@@ -3543,10 +3548,8 @@ func is_adjacent_to_enemy(map: Map, pos: Vector2i, actor: Actor) -> bool:
 func spawn_actor_on_map_border(map: Map, actor_to_spawn: Actor, min_dist_to_player: int, must_be_outside: bool) -> bool:
 	# find a good spot.
 	var max_tries := 4 * (map.width + map.height)
-	var i := 0
 	var pos := Vector2i.ZERO
-	while true:
-		i += 1
+	for i in range(1, max_tries + 1):
 		# roll a position on the border.
 		var x: int = 0 if rules.roll_chance(50) else map.width - 1
 		var y: int = 0 if rules.roll_chance(50) else map.height - 1
@@ -3557,27 +3560,18 @@ func spawn_actor_on_map_border(map: Map, actor_to_spawn: Actor, min_dist_to_play
 		# must be free, (outside), far enough to player and not adjacent to an enemy.
 		pos = Vector2i(x, y)
 		if must_be_outside and map.get_tile_at(pos.x, pos.y).is_inside:
-			if i > max_tries:
-				break
 			continue
 		if not rules.is_walkable_for(actor_to_spawn, map, pos.x, pos.y).ok:
-			if i > max_tries:
-				break
 			continue
 		if distance_to_player_pos(map, pos) < min_dist_to_player:
-			if i > max_tries:
-				break
 			continue
 		if is_adjacent_to_enemy(map, pos, actor_to_spawn):
-			if i > max_tries:
-				break
 			continue
 		# success!
 		map.place_actor_at(actor_to_spawn, pos)
 		# trigger stuff
 		on_actor_enter_tile(actor_to_spawn)
 		return true
-		break
 	# failed.
 	return false
 
@@ -3585,10 +3579,8 @@ func spawn_actor_on_map_border(map: Map, actor_to_spawn: Actor, min_dist_to_play
 func spawn_actor_near(map: Map, actor_to_spawn: Actor, min_dist_to_player: int, near_point: Vector2i, max_dist_to_point: int) -> bool:
 	# find a good spot.
 	var max_tries := 4 * (map.width + map.height)
-	var i := 0
 	var pos := Vector2i.ZERO
-	while true:
-		i += 1
+	for i in range(1, max_tries + 1):
 		# roll a position.
 		var x := near_point.x + rules.roll(1, max_dist_to_point + 1) - rules.roll(1, max_dist_to_point + 1)
 		var y := near_point.y + rules.roll(1, max_dist_to_point + 1) - rules.roll(1, max_dist_to_point + 1)
@@ -3596,20 +3588,12 @@ func spawn_actor_near(map: Map, actor_to_spawn: Actor, min_dist_to_player: int, 
 		pos = map.trim_point_to_bounds(Vector2i(x, y))
 		# must free, outside, far enough to player and not adjacent to an enemy.
 		if map.get_tile_at(pos.x, pos.y).is_inside:
-			if i > max_tries:
-				break
 			continue
 		if not rules.is_walkable_for(actor_to_spawn, map, pos.x, pos.y).ok:
-			if i > max_tries:
-				break
 			continue
 		if distance_to_player_pos(map, pos) < min_dist_to_player:
-			if i > max_tries:
-				break
 			continue
 		if is_adjacent_to_enemy(map, pos, actor_to_spawn):
-			if i > max_tries:
-				break
 			continue
 		# success!
 		map.place_actor_at(actor_to_spawn, pos)
@@ -3642,14 +3626,14 @@ func spawn_new_undead(map: Map, day: int) -> void:
 	spawn_actor_on_map_border(map, new_undead, SPAWN_DISTANCE_TO_PLAYER, true)
 
 
-func spawn_new_sewers_undead(map: Map, day: int) -> void:
+func spawn_new_sewers_undead(map: Map, _day: int) -> void:
 	# Create actor.
 	var new_undead: Actor = town_generator.create_new_sewers_undead(map.local_time.turn_counter)
 	# Try to spawn it.
 	spawn_actor_on_map_border(map, new_undead, SPAWN_DISTANCE_TO_PLAYER, false)
 
 
-func spawn_new_subway_undead(map: Map, day: int) -> void:
+func spawn_new_subway_undead(map: Map, _day: int) -> void:
 	# Create actor.
 	var new_undead: Actor = town_generator.create_new_subway_undead(map.local_time.turn_counter)
 	# Try to spawn it.
@@ -3691,8 +3675,7 @@ func spawn_new_nat_guard_leader(map: Map) -> Actor:
 	town_generator.give_starting_skill_to_actor(new_nat_leader, Skills.IDs.LEADERSHIP)
 	# additional items : z-tracker.
 	if map.local_time.day > NATGUARD_ZTRACKER_DAY:
-		# TODO: make_item_z_tracker not found in generator port yet
-		new_nat_leader.inventory.add_all(town_generator.make_item_z_tracker())
+		new_nat_leader.inventory.add_all(town_generator.make_item_ztracker())
 	# Try to spawn it.
 	var spawned := spawn_actor_on_map_border(map, new_nat_leader, SPAWN_DISTANCE_TO_PLAYER, true)
 	# done.
@@ -3963,6 +3946,11 @@ func handle_player_actor(p_player: Actor) -> void:
 				mouse_buttons = ui.ui_peek_mouse_buttons()
 				if mouse_pos != prev_mouse_pos or mouse_buttons != 0:
 					input_loop = false
+				else:
+					# No input yet: yield briefly instead of busy-spinning on
+					# the game thread (C# UI_PeekKey pumped the WinForms
+					# message loop; a 1ms sleep is the Godot equivalent).
+					ui.ui_wait(1)
 
 		# 3. Handle input
 		if has_key:
@@ -5816,7 +5804,7 @@ func handle_player_fire_mode(actor: Actor) -> bool:
 
 		# 2. Get input.
 		var key: InputEventKey = ui.ui_wait_key()
-		var command: int = InputTranslator.key_to_command(key)  # C# only uses it in a comment
+		var _command: int = InputTranslator.key_to_command(key)  # C# only uses it in a comment
 
 		# 3. Handle input
 		if key.keycode == KEY_ESCAPE:  # command == PlayerCommand.EXIT_OR_CANCEL
@@ -5825,7 +5813,8 @@ func handle_player_fire_mode(actor: Actor) -> bool:
 			i_current_target = (i_current_target + 1) % potential_targets.size()
 		elif key.keycode == KEY_M:  # next mode
 			# switch.
-			mode = (mode + 1) % Attack.FireMode._COUNT
+			var next_mode: Variant = (mode + 1) % Attack.FireMode._COUNT
+			mode = next_mode
 			# tell. (C# prints the enum name; GDScript prints the value.)
 			add_message(Message.new("Switched to %s fire mode." % str(mode), session.world_time.turn_counter, Color.YELLOW))
 			# alpha10: save preference to session
@@ -5849,15 +5838,15 @@ func handle_player_fire_mode(actor: Actor) -> bool:
 # Mode text/color constants (RogueGame.cs constants region, lines 92-109)
 
 
-func handle_player_mark_enemies(player: Actor) -> void:
+func handle_player_mark_enemies(_player: Actor) -> void:
 	# Pre-conditions.
 	# FIXME put all that into a rule Rule.CanMakeEnemyOf()
-	if player.model.abilities.is_undead:
+	if _player.model.abilities.is_undead:
 		add_message(make_error_message("Undeads can't have personal enemies."))
 		return
 
 	# List all visible actors.
-	var map: Map = player.location.map
+	var map: Map = _player.location.map
 	var visible_actors: Array[Actor] = []
 	for p in player_fov:
 		var a: Actor = map.get_actor_at(p)
@@ -5884,7 +5873,7 @@ func handle_player_mark_enemies(player: Actor) -> void:
 
 		# 2. Get input.
 		var key: InputEventKey = ui.ui_wait_key()
-		var command: int = InputTranslator.key_to_command(key)
+		var _command: int = InputTranslator.key_to_command(key)
 
 		# 3. Handle input
 		if key.keycode == KEY_ESCAPE:  # command == PlayerCommand.EXIT_OR_CANCEL
@@ -5895,32 +5884,32 @@ func handle_player_mark_enemies(player: Actor) -> void:
 			# never make enemies of leader/follower/enemy faction.
 			# FIXME put all that into a rule Rule.CanMakeEnemyOf()
 			var allowed := true
-			if current_actor.leader == player:
+			if current_actor.leader == _player:
 				add_message(make_error_message("Can't make a follower your enemy."))
 				allowed = false
-			elif player.leader == current_actor:
+			elif _player.leader == current_actor:
 				add_message(make_error_message("Can't make your leader your enemy."))
 				allowed = false
-			elif rules.are_enemies(player, current_actor):
+			elif rules.are_enemies(_player, current_actor):
 				add_message(make_error_message("Already enemies."))
 				allowed = false
 
 			# do it?
 			if allowed:
 				add_message(Message.new("%s is now a personal enemy." % current_actor.the_name, session.world_time.turn_counter, Color.ORANGE))
-				do_make_aggression(player, current_actor)
+				do_make_aggression(_player, current_actor)
 
 	# cleanup.
 	clear_overlays()
 
 
-func handle_player_throw_grenade(player: Actor) -> bool:
+func handle_player_throw_grenade(_player: Actor) -> bool:
 	var loop := true
 	var action_done := false
 
 	# Get grenade equipped.
-	var unprimed_grenade: ItemGrenade = player.get_equipped_weapon() as ItemGrenade
-	var primed_grenade: ItemGrenadePrimed = player.get_equipped_weapon() as ItemGrenadePrimed
+	var unprimed_grenade: ItemGrenade = _player.get_equipped_weapon() as ItemGrenade
+	var primed_grenade: ItemGrenadePrimed = _player.get_equipped_weapon() as ItemGrenadePrimed
 	if unprimed_grenade == null and primed_grenade == null:
 		add_message(make_error_message("No grenade to throw."))
 		redraw_play_screen()
@@ -5932,16 +5921,16 @@ func handle_player_throw_grenade(player: Actor) -> bool:
 		grenade_model = (primed_grenade.model as ItemGrenadePrimedModel).grenade_model
 
 	# Get data.
-	var map: Map = player.location.map
-	var target_throw: Vector2i = player.location.position
-	var max_throw_dist: int = rules.actor_max_throw_range(player, grenade_model.max_throw_distance)
+	var map: Map = _player.location.map
+	var target_throw: Vector2i = _player.location.position
+	var max_throw_dist: int = rules.actor_max_throw_range(_player, grenade_model.max_throw_distance)
 
 	# Loop.
 	var lot: Array[Vector2i] = []
 	while loop:
 		# get LoT.
 		lot.clear()
-		var throw_res: Dictionary = rules.can_actor_throw_to(player, target_throw, lot)
+		var throw_res: Dictionary = rules.can_actor_throw_to(_player, target_throw, lot)
 		var can_throw_at_target: bool = throw_res.ok
 		var reason: String = throw_res.fail_reason
 
@@ -5966,7 +5955,7 @@ func handle_player_throw_grenade(player: Actor) -> bool:
 				var do_it := true
 
 				# if within the blast radius, ask for confirmation...
-				if rules.grid_distance_points(player.location.position, target_throw) <= grenade_model.blast_attack.radius:
+				if rules.grid_distance_points(_player.location.position, target_throw) <= grenade_model.blast_attack.radius:
 					clear_messages()
 					add_message(Message.new("You are in the blast radius!", session.world_time.turn_counter, Color.YELLOW))
 					add_message(make_yes_no_message("Really throw there"))
@@ -5978,9 +5967,9 @@ func handle_player_throw_grenade(player: Actor) -> bool:
 				if do_it:
 					# fire in the hole!
 					if unprimed_grenade != null:
-						do_throw_grenade_unprimed(player, target_throw)
+						do_throw_grenade_unprimed(_player, target_throw)
 					else:
-						do_throw_grenade_primed(player, target_throw)
+						do_throw_grenade_primed(_player, target_throw)
 					redraw_play_screen()
 					loop = false
 					action_done = true
@@ -5991,7 +5980,7 @@ func handle_player_throw_grenade(player: Actor) -> bool:
 			var dir: Direction = command_to_direction(command)
 			if dir != null:
 				var pos: Vector2i = target_throw + dir.vector
-				if map.is_in_bounds_p(pos) and rules.grid_distance_points(player.location.position, pos) <= max_throw_dist:
+				if map.is_in_bounds_p(pos) and rules.grid_distance_points(_player.location.position, pos) <= max_throw_dist:
 					target_throw = pos
 
 	# cleanup.
@@ -6001,9 +5990,9 @@ func handle_player_throw_grenade(player: Actor) -> bool:
 	return action_done
 
 
-func handle_player_sleep(player: Actor) -> bool:
+func handle_player_sleep(_player: Actor) -> bool:
 	# Check rule.
-	var sleep_res: Dictionary = rules.can_actor_sleep(player)
+	var sleep_res: Dictionary = rules.can_actor_sleep(_player)
 	if not sleep_res.ok:
 		add_message(make_error_message("Cannot sleep now : %s." % sleep_res.fail_reason))
 		return false
@@ -6021,14 +6010,14 @@ func handle_player_sleep(player: Actor) -> bool:
 
 	# Start sleeping.
 	add_message(Message.new("Goodnight, happy nightmares!", session.world_time.turn_counter, Color.YELLOW))
-	do_start_sleeping(player)
+	do_start_sleeping(_player)
 	redraw_play_screen()
 	# check music.
 	music_manager.stop()
 	music_manager.play_looping(GameMusics.SLEEP, MusicPriority.PRIORITY_EVENT)
 	return true
 
-func handle_player_switch_place(player: Actor) -> bool:
+func handle_player_switch_place(_player: Actor) -> bool:
 	var loop := true
 	var action_done := false
 
@@ -6046,16 +6035,16 @@ func handle_player_switch_place(player: Actor) -> bool:
 		if dir == null:
 			loop = false
 		elif dir != Direction.NEUTRAL:
-			var pos: Vector2i = player.location.position + dir.vector
-			if player.location.map.is_in_bounds_p(pos):
-				var other: Actor = player.location.map.get_actor_at(pos)
+			var pos: Vector2i = _player.location.position + dir.vector
+			if _player.location.map.is_in_bounds_p(pos):
+				var other: Actor = _player.location.map.get_actor_at(pos)
 				if other != null:
-					var switch_res: Dictionary = rules.can_actor_switch_place_with(player, other)
+					var switch_res: Dictionary = rules.can_actor_switch_place_with(_player, other)
 					if switch_res.ok:
 						# switch place.
 						action_done = true
 						loop = false
-						do_switch_place(player, other)
+						do_switch_place(_player, other)
 					else:
 						add_message(make_error_message("Can't switch place : %s" % switch_res.fail_reason))
 				else:
@@ -6068,7 +6057,7 @@ func handle_player_switch_place(player: Actor) -> bool:
 	return action_done
 
 
-func handle_player_take_lead(player: Actor) -> bool:
+func handle_player_take_lead(_player: Actor) -> bool:
 	var loop := true
 	var action_done := false
 
@@ -6086,11 +6075,11 @@ func handle_player_take_lead(player: Actor) -> bool:
 		if dir == null:
 			loop = false
 		elif dir != Direction.NEUTRAL:
-			var pos: Vector2i = player.location.position + dir.vector
-			if player.location.map.is_in_bounds_p(pos):
-				var other: Actor = player.location.map.get_actor_at(pos)
+			var pos: Vector2i = _player.location.position + dir.vector
+			if _player.location.map.is_in_bounds_p(pos):
+				var other: Actor = _player.location.map.get_actor_at(pos)
 				if other != null:
-					var lead_res: Dictionary = rules.can_actor_take_lead(player, other)
+					var lead_res: Dictionary = rules.can_actor_take_lead(_player, other)
 					var reason: String = lead_res.get("fail_reason", "")
 					if lead_res.ok:
 						# take lead.
@@ -6099,9 +6088,9 @@ func handle_player_take_lead(player: Actor) -> bool:
 
 						# alpha10.1 steal lead vs take lead
 						if other.has_leader:
-							do_steal_lead(player, other)
+							do_steal_lead(_player, other)
 						else:
-							do_take_lead(player, other)
+							do_take_lead(_player, other)
 
 						# scoring.
 						session.scoring.add_event(session.world_time.turn_counter, "Recruited %s." % other.the_name)
@@ -6110,8 +6099,8 @@ func handle_player_take_lead(player: Actor) -> bool:
 						add_message(Message.new("(you can now set directives and orders for your new follower).", session.world_time.turn_counter, Color.WHITE))
 						# C# prints the key binding via ToString(); Godot prints the keycode string.
 						add_message(Message.new("(to give order : press <%s>)." % OS.get_keycode_string(key_bindings.get_key(PlayerCommand.Command.ORDER_MODE)), session.world_time.turn_counter, Color.WHITE))
-					elif other.leader == player:
-						var cancel_res: Dictionary = rules.can_actor_cancel_lead(player, other)
+					elif other.leader == _player:
+						var cancel_res: Dictionary = rules.can_actor_cancel_lead(_player, other)
 						reason = cancel_res.get("fail_reason", "")
 						if cancel_res.ok:
 							# ask for confirmation.
@@ -6122,7 +6111,7 @@ func handle_player_take_lead(player: Actor) -> bool:
 								# cancel lead.
 								action_done = true
 								loop = false
-								do_cancel_lead(player, other)
+								do_cancel_lead(_player, other)
 
 								# scoring.
 								session.scoring.add_event(session.world_time.turn_counter, "Fired %s." % other.the_name)
@@ -6142,12 +6131,12 @@ func handle_player_take_lead(player: Actor) -> bool:
 	return action_done
 
 
-func handle_player_push(player: Actor) -> bool:
+func handle_player_push(_player: Actor) -> bool:
 	# fail immediatly for stupid cases.
-	if not rules.has_actor_push_ability(player):
+	if not rules.has_actor_push_ability(_player):
 		add_message(make_error_message("Cannot push objects."))
 		return false
-	if rules.is_actor_tired(player):
+	if rules.is_actor_tired(_player):
 		add_message(make_error_message("Too tired to push."))
 		return false
 
@@ -6168,25 +6157,25 @@ func handle_player_push(player: Actor) -> bool:
 		if dir == null:
 			loop = false
 		elif dir != Direction.NEUTRAL:
-			var pos: Vector2i = player.location.position + dir.vector
-			if player.location.map.is_in_bounds_p(pos):
+			var pos: Vector2i = _player.location.position + dir.vector
+			if _player.location.map.is_in_bounds_p(pos):
 				# shove actor vs push object.
-				var other: Actor = player.location.map.get_actor_at(pos)
-				var map_obj: MapObject = player.location.map.get_map_object_at(pos)
+				var other: Actor = _player.location.map.get_actor_at(pos)
+				var map_obj: MapObject = _player.location.map.get_map_object_at(pos)
 				if other != null:
 					# shove.
-					var shove_res: Dictionary = rules.can_actor_shove(player, other)
+					var shove_res: Dictionary = rules.can_actor_shove(_player, other)
 					if shove_res.ok:
-						if handle_player_shove_actor(player, other):
+						if handle_player_shove_actor(_player, other):
 							loop = false
 							action_done = true
 					else:
 						add_message(make_error_message("Cannot shove %s : %s." % [other.the_name, shove_res.fail_reason]))
 				elif map_obj != null:
 					# push.
-					var push_res: Dictionary = rules._can_actor_push(player, map_obj)
+					var push_res: Dictionary = rules._can_actor_push(_player, map_obj)
 					if push_res.ok:
-						if handle_player_push_object(player, map_obj):
+						if handle_player_push_object(_player, map_obj):
 							loop = false
 							action_done = true
 					else:
@@ -6201,7 +6190,7 @@ func handle_player_push(player: Actor) -> bool:
 	# return if we did an action.
 	return action_done
 
-func handle_player_push_object(player: Actor, map_obj: MapObject) -> bool:
+func handle_player_push_object(_player: Actor, map_obj: MapObject) -> bool:
 	var loop := true
 	var action_done := false
 
@@ -6221,10 +6210,10 @@ func handle_player_push_object(player: Actor, map_obj: MapObject) -> bool:
 			loop = false
 		elif dir != Direction.NEUTRAL:
 			var move_pos: Vector2i = map_obj.location.position + dir.vector
-			if player.location.map.is_in_bounds_p(move_pos):
+			if _player.location.map.is_in_bounds_p(move_pos):
 				var push_res: Dictionary = rules.can_push_object_to(map_obj, move_pos)
 				if push_res.ok:
-					do_push(player, map_obj, move_pos)
+					do_push(_player, map_obj, move_pos)
 					loop = false
 					action_done = true
 				else:
@@ -6237,7 +6226,7 @@ func handle_player_push_object(player: Actor, map_obj: MapObject) -> bool:
 	return action_done
 
 
-func handle_player_shove_actor(player: Actor, other: Actor) -> bool:
+func handle_player_shove_actor(_player: Actor, other: Actor) -> bool:
 	var loop := true
 	var action_done := false
 
@@ -6257,10 +6246,10 @@ func handle_player_shove_actor(player: Actor, other: Actor) -> bool:
 			loop = false
 		elif dir != Direction.NEUTRAL:
 			var move_pos: Vector2i = other.location.position + dir.vector
-			if player.location.map.is_in_bounds_p(move_pos):
+			if _player.location.map.is_in_bounds_p(move_pos):
 				var shove_res: Dictionary = rules.can_shove_actor_to(other, move_pos)
 				if shove_res.ok:
-					do_shove(player, other, move_pos)
+					do_shove(_player, other, move_pos)
 					loop = false
 					action_done = true
 				else:
@@ -6274,15 +6263,15 @@ func handle_player_shove_actor(player: Actor, other: Actor) -> bool:
 
 
 # alpha10
-func handle_player_pull(player: Actor) -> bool:
+func handle_player_pull(_player: Actor) -> bool:
 	# fail immediatly for stupid cases.
-	if not rules.has_actor_push_ability(player):
+	if not rules.has_actor_push_ability(_player):
 		add_message(make_error_message("Cannot pull objects."))
 		return false
-	if rules.is_actor_tired(player):
+	if rules.is_actor_tired(_player):
 		add_message(make_error_message("Too tired to pull."))
 		return false
-	var other_mobj: MapObject = player.location.map.get_map_object_at(player.location.position)
+	var other_mobj: MapObject = _player.location.map.get_map_object_at(_player.location.position)
 	if other_mobj != null:
 		add_message(make_error_message("Cannot pull : %s is blocking." % other_mobj.the_name))
 		return false
@@ -6304,24 +6293,24 @@ func handle_player_pull(player: Actor) -> bool:
 		if dir == null:
 			loop = false
 		elif dir != Direction.NEUTRAL:
-			var pos: Vector2i = player.location.position + dir.vector
-			if player.location.map.is_in_bounds_p(pos):
-				var map_obj: MapObject = player.location.map.get_map_object_at(pos)
-				var other: Actor = player.location.map.get_actor_at(pos)
+			var pos: Vector2i = _player.location.position + dir.vector
+			if _player.location.map.is_in_bounds_p(pos):
+				var map_obj: MapObject = _player.location.map.get_map_object_at(pos)
+				var other: Actor = _player.location.map.get_actor_at(pos)
 				if other != null:
 					# pull-shove.
-					var shove_res: Dictionary = rules.can_actor_shove(player, other)  # if can shove, can pull-shove.
+					var shove_res: Dictionary = rules.can_actor_shove(_player, other)  # if can shove, can pull-shove.
 					if shove_res.ok:
-						if handle_player_pull_actor(player, other):
+						if handle_player_pull_actor(_player, other):
 							loop = false
 							action_done = true
 					else:
 						add_message(make_error_message("Cannot pull %s : %s." % [other.the_name, shove_res.fail_reason]))
 				elif map_obj != null:
 					# pull.
-					var push_res: Dictionary = rules._can_actor_push(player, map_obj)  # if can push, can pull.
+					var push_res: Dictionary = rules._can_actor_push(_player, map_obj)  # if can push, can pull.
 					if push_res.ok:
-						if handle_player_pull_object(player, map_obj):
+						if handle_player_pull_object(_player, map_obj):
 							loop = false
 							action_done = true
 					else:
@@ -6337,7 +6326,7 @@ func handle_player_pull(player: Actor) -> bool:
 	return action_done
 
 # alpha10
-func handle_player_pull_object(player: Actor, map_obj: MapObject) -> bool:
+func handle_player_pull_object(_player: Actor, map_obj: MapObject) -> bool:
 	var loop := true
 	var action_done := false
 
@@ -6356,11 +6345,11 @@ func handle_player_pull_object(player: Actor, map_obj: MapObject) -> bool:
 		if dir == null:
 			loop = false
 		elif dir != Direction.NEUTRAL:
-			var move_to_pos: Vector2i = player.location.position + dir.vector
-			if player.location.map.is_in_bounds_p(move_to_pos):
-				var pull_res: Dictionary = rules.can_pull_object(player, map_obj, move_to_pos)
+			var move_to_pos: Vector2i = _player.location.position + dir.vector
+			if _player.location.map.is_in_bounds_p(move_to_pos):
+				var pull_res: Dictionary = rules.can_pull_object(_player, map_obj, move_to_pos)
 				if pull_res.ok:
-					do_pull(player, map_obj, move_to_pos)
+					do_pull(_player, map_obj, move_to_pos)
 					loop = false
 					action_done = true
 				else:
@@ -6374,7 +6363,7 @@ func handle_player_pull_object(player: Actor, map_obj: MapObject) -> bool:
 
 
 # alpha10
-func handle_player_pull_actor(player: Actor, other: Actor) -> bool:
+func handle_player_pull_actor(_player: Actor, other: Actor) -> bool:
 	var loop := true
 	var action_done := false
 
@@ -6393,11 +6382,11 @@ func handle_player_pull_actor(player: Actor, other: Actor) -> bool:
 		if dir == null:
 			loop = false
 		elif dir != Direction.NEUTRAL:
-			var move_to_pos: Vector2i = player.location.position + dir.vector
-			if player.location.map.is_in_bounds_p(move_to_pos):
-				var pull_res: Dictionary = rules.can_pull_actor(player, other, move_to_pos)
+			var move_to_pos: Vector2i = _player.location.position + dir.vector
+			if _player.location.map.is_in_bounds_p(move_to_pos):
+				var pull_res: Dictionary = rules.can_pull_actor(_player, other, move_to_pos)
 				if pull_res.ok:
-					do_pull_actor(player, other, move_to_pos)
+					do_pull_actor(_player, other, move_to_pos)
 					loop = false
 					action_done = true
 				else:
@@ -6410,9 +6399,9 @@ func handle_player_pull_actor(player: Actor, other: Actor) -> bool:
 	return action_done
 
 
-func handle_player_use_spray(player: Actor) -> bool:
+func handle_player_use_spray(_player: Actor) -> bool:
 	# get equipped item.
-	var it: Item = player.get_equipped_item(Doll.DollPart.LEFT_HAND)
+	var it: Item = _player.get_equipped_item(Doll.DollPart.LEFT_HAND)
 	if it == null:
 		add_message(make_error_message("No spray equipped."))
 		redraw_play_screen()
@@ -6425,13 +6414,13 @@ func handle_player_use_spray(player: Actor) -> bool:
 	# 1. Spray paint.
 	var spray_paint: ItemSprayPaint = it as ItemSprayPaint
 	if spray_paint != null:
-		return handle_player_tag(player)
+		return handle_player_tag(_player)
 
 	# 2. Spray scent.
 	var spray_scent: ItemSprayScent = it as ItemSprayScent
 	if spray_scent != null:
 		# alpha10 new way to use stench killer
-		return handle_player_spray_odor_suppressor(player)
+		return handle_player_spray_odor_suppressor(_player)
 
 	# no spray equipped.
 	add_message(make_error_message("No spray equipped."))
@@ -6439,12 +6428,12 @@ func handle_player_use_spray(player: Actor) -> bool:
 	return false
 
 
-func handle_player_tag(player: Actor) -> bool:
+func handle_player_tag(_player: Actor) -> bool:
 	var loop := true
 	var action_done := false
 
 	# Check if has spray paint.
-	var spray_paint: ItemSprayPaint = player.get_equipped_item(Doll.DollPart.LEFT_HAND) as ItemSprayPaint
+	var spray_paint: ItemSprayPaint = _player.get_equipped_item(Doll.DollPart.LEFT_HAND) as ItemSprayPaint
 	if spray_paint == null:
 		add_message(make_error_message("No spray paint equipped."))
 		redraw_play_screen()
@@ -6467,11 +6456,11 @@ func handle_player_tag(player: Actor) -> bool:
 		if dir == null:
 			loop = false
 		elif dir != Direction.NEUTRAL:
-			var pos: Vector2i = player.location.position + dir.vector
-			if player.location.map.is_in_bounds_p(pos):
-				var tag_res: Dictionary = can_tag(player.location.map, pos)
+			var pos: Vector2i = _player.location.position + dir.vector
+			if _player.location.map.is_in_bounds_p(pos):
+				var tag_res: Dictionary = can_tag(_player.location.map, pos)
 				if tag_res.ok:
-					do_tag(player, spray_paint, pos)
+					do_tag(_player, spray_paint, pos)
 					loop = false
 					action_done = true
 				else:
@@ -6508,12 +6497,12 @@ func can_tag(map: Map, pos: Vector2i) -> Dictionary:
 	return {"ok": true, "fail_reason": ""}
 
 # alpha10 new way to use stench killer
-func handle_player_spray_odor_suppressor(player: Actor) -> bool:
+func handle_player_spray_odor_suppressor(_player: Actor) -> bool:
 	var loop := true
 	var action_done := false
 
 	# Check if has odor suppressor.
-	var spray: ItemSprayScent = player.get_equipped_item(Doll.DollPart.LEFT_HAND) as ItemSprayScent
+	var spray: ItemSprayScent = _player.get_equipped_item(Doll.DollPart.LEFT_HAND) as ItemSprayScent
 	if spray == null:
 		add_message(make_error_message("No spray equipped."))
 		redraw_play_screen()
@@ -6539,19 +6528,19 @@ func handle_player_spray_odor_suppressor(player: Actor) -> bool:
 			var spray_on: Actor = null
 
 			if dir == Direction.NEUTRAL:
-				spray_on = player
+				spray_on = _player
 			else:
-				var pos: Vector2i = player.location.position + dir.vector
-				if player.location.map.is_in_bounds_p(pos):
-					spray_on = player.location.map.get_actor_at(pos)
+				var pos: Vector2i = _player.location.position + dir.vector
+				if _player.location.map.is_in_bounds_p(pos):
+					spray_on = _player.location.map.get_actor_at(pos)
 
 			if spray_on == null:
 				add_message(make_error_message("No one to spray on here."))
 				redraw_play_screen()
 			else:
-				var spray_res: Dictionary = rules.can_actor_spray_odor_suppressor(player, spray, spray_on)
+				var spray_res: Dictionary = rules.can_actor_spray_odor_suppressor(_player, spray, spray_on)
 				if spray_res.ok:
-					do_spray_odor_suppressor(player, spray, spray_on)
+					do_spray_odor_suppressor(_player, spray, spray_on)
 					loop = false
 					action_done = true
 				else:
@@ -6565,7 +6554,7 @@ func handle_player_spray_odor_suppressor(player: Actor) -> bool:
 	return action_done
 
 
-func start_player_wait_long(player: Actor) -> void:
+func start_player_wait_long(_player: Actor) -> void:
 	# alpha10.1 check autosave before player starts long wait
 	check_auto_save_time()
 
@@ -6575,11 +6564,11 @@ func start_player_wait_long(player: Actor) -> void:
 	player_long_wait_end = WorldTime.new(session.world_time.turn_counter + WorldTime.TURNS_PER_HOUR)
 
 	# message.
-	add_message(make_message(player, "%s waiting." % conjugate(player, VERB_START)))
+	add_message(make_message(_player, "%s waiting." % conjugate(_player, VERB_START)))
 	redraw_play_screen()
 
 
-func check_player_wait_long(player: Actor) -> bool:
+func check_player_wait_long(_player: Actor) -> bool:
 	# Stop waiting if:
 	# 1. Force stop wait flag set.
 	# 2. Time reached.
@@ -6596,13 +6585,13 @@ func check_player_wait_long(player: Actor) -> bool:
 		return false
 
 	# 3. Hungry or sleepy.
-	if rules.is_actor_hungry(player) or rules.is_actor_starving(player) or rules.is_actor_sleepy(player) or rules.is_actor_exhausted(player):
+	if rules.is_actor_hungry(_player) or rules.is_actor_starving(_player) or rules.is_actor_sleepy(_player) or rules.is_actor_exhausted(_player):
 		return false
 
 	# 4. Enemy.
 	for p in player_fov:
-		var other: Actor = player.location.map.get_actor_at(p)
-		if other != null and rules.are_enemies(player, other):
+		var other: Actor = _player.location.map.get_actor_at(p)
+		if other != null and rules.are_enemies(_player, other):
 			return false
 
 	# 5. Sanity check
@@ -6613,31 +6602,31 @@ func check_player_wait_long(player: Actor) -> bool:
 	return true
 
 #region Ordering followers
-func handle_player_order_mode(player: Actor) -> bool:
+func handle_player_order_mode(_player: Actor) -> bool:
 	# check if we have followers to order.
-	if player.count_followers == 0:
+	if _player.count_followers == 0:
 		add_message(make_error_message("No followers to give orders to."))
 		return false
 
 	# get followers data.
 	var followers: Array[Actor] = []
-	followers.resize(player.count_followers)
+	followers.resize(_player.count_followers)
 	var fovs: Array = []
-	fovs.resize(player.count_followers)
+	fovs.resize(_player.count_followers)
 	var has_link_with: Array[bool] = []
-	has_link_with.resize(player.count_followers)
+	has_link_with.resize(_player.count_followers)
 	var i_fo := 0
-	for fo in player.followers:
+	for fo in _player.followers:
 		followers[i_fo] = fo
 		fovs[i_fo] = LOS.compute_fov_for(rules, fo, session.world_time, session.world.weather)
-		var in_view: bool = player.location.position in fovs[i_fo] and fo.location.position in player_fov
-		var linked_by_phone: bool = are_linked_by_phone(player, fo)
+		var in_view: bool = _player.location.position in fovs[i_fo] and fo.location.position in player_fov
+		var linked_by_phone: bool = are_linked_by_phone(_player, fo)
 		has_link_with[i_fo] = in_view or linked_by_phone
 		i_fo += 1
 
 	# if one follower and he's linked, skip selection and directly go to its menu.
-	if player.count_followers == 1 and has_link_with[0]:
-		var done: bool = handle_player_order_follower(player, followers[0])
+	if _player.count_followers == 1 and has_link_with[0]:
+		var done: bool = handle_player_order_follower(_player, followers[0])
 		# cleanup.
 		clear_overlays()
 		clear_messages()
@@ -6687,7 +6676,7 @@ func handle_player_order_mode(player: Actor) -> bool:
 			if has_link_with[f]:
 				# Follower selected, select directive/order
 				var selected_follower: Actor = followers[f]
-				if handle_player_order_follower(player, selected_follower):
+				if handle_player_order_follower(_player, selected_follower):
 					loop = false
 					action_done = true
 
@@ -6699,7 +6688,7 @@ func handle_player_order_mode(player: Actor) -> bool:
 	return action_done
 
 
-func handle_player_directive_follower(player: Actor, follower: Actor) -> bool:
+func handle_player_directive_follower(_player: Actor, follower: Actor) -> bool:
 	var loop := true
 	var action_done := false
 
@@ -6751,13 +6740,13 @@ func handle_player_directive_follower(player: Actor, follower: Actor) -> bool:
 	return action_done
 
 
-func handle_player_order_follower(player: Actor, follower: Actor) -> bool:
+func handle_player_order_follower(_player: Actor, follower: Actor) -> bool:
 	# check trust.
 	if not rules.is_actor_trusting_leader(follower):
 		# say/phone
 		if is_visible_to_player(follower):
-			do_say(follower, player, "Sorry, I don't trust you enough yet.", Sayflags.IS_FREE_ACTION | Sayflags.IS_IMPORTANT)
-		elif are_linked_by_phone(follower, player):
+			do_say(follower, _player, "Sorry, I don't trust you enough yet.", Sayflags.IS_FREE_ACTION | Sayflags.IS_IMPORTANT)
+		elif are_linked_by_phone(follower, _player):
 			clear_messages()
 			add_message(make_message(follower, "Sorry, I don't trust you enough yet."))
 			add_message_press_enter()
@@ -6799,70 +6788,70 @@ func handle_player_order_follower(player: Actor, follower: Actor) -> bool:
 		elif choice >= 0 and choice <= 9:
 			match choice:
 				0:  # cancel current order
-					do_cancel_order(player, follower)
+					do_cancel_order(_player, follower)
 					loop = false
 					action_done = true
 				1:  # set directives.
-					handle_player_directive_follower(player, follower)
+					handle_player_directive_follower(_player, follower)
 				2:  # barricade (one)
-					if handle_player_order_follower_to_barricade(player, follower, follower_fov, false):
+					if handle_player_order_follower_to_barricade(_player, follower, follower_fov, false):
 						loop = false
 						action_done = true
 				3:  # barricade (max)
-					if handle_player_order_follower_to_barricade(player, follower, follower_fov, true):
+					if handle_player_order_follower_to_barricade(_player, follower, follower_fov, true):
 						loop = false
 						action_done = true
 				4:  # guard
-					if handle_player_order_follower_to_guard(player, follower, follower_fov):
+					if handle_player_order_follower_to_guard(_player, follower, follower_fov):
 						loop = false
 						action_done = true
 				5:  # patrol
-					if handle_player_order_follower_to_patrol(player, follower, follower_fov):
+					if handle_player_order_follower_to_patrol(_player, follower, follower_fov):
 						loop = false
 						action_done = true
 				6:  # drop all items
-					if handle_player_order_follower_to_drop_all_items(player, follower):
+					if handle_player_order_follower_to_drop_all_items(_player, follower):
 						loop = false
 						action_done = true
 				7:  # build small fort.
-					if handle_player_order_follower_to_build_fortification(player, follower, follower_fov, false):
+					if handle_player_order_follower_to_build_fortification(_player, follower, follower_fov, false):
 						loop = false
 						action_done = true
 				8:  # build large fort.
-					if handle_player_order_follower_to_build_fortification(player, follower, follower_fov, true):
+					if handle_player_order_follower_to_build_fortification(_player, follower, follower_fov, true):
 						loop = false
 						action_done = true
 				9:  # report
-					if handle_player_order_follower_to_report(player, follower):
+					if handle_player_order_follower_to_report(_player, follower):
 						loop = false
 						action_done = true
 		# second set of choices A-xxx
 		else:
 			match key.keycode:
 				KEY_A:  # give items...
-					if handle_player_order_follower_to_give_items(player, follower):
+					if handle_player_order_follower_to_give_items(_player, follower):
 						loop = false
 						action_done = true
 				KEY_B:  # sleep now
-					if handle_player_order_follower_to_sleep(player, follower):
+					if handle_player_order_follower_to_sleep(_player, follower):
 						loop = false
 						action_done = true
 				KEY_C:  # toggle follow
-					if handle_player_order_follower_to_toggle_follow(player, follower):
+					if handle_player_order_follower_to_toggle_follow(_player, follower):
 						loop = false
 						action_done = true
 				KEY_D:  # where are you?
-					if handle_player_order_follower_to_report_position(player, follower):
+					if handle_player_order_follower_to_report_position(_player, follower):
 						loop = false
 						action_done = true
 
 	# return if we did an action.
 	return action_done
 
-func handle_player_order_follower_to_build_fortification(player: Actor, follower: Actor, follower_fov: Dictionary, is_large: bool) -> bool:
+func handle_player_order_follower_to_build_fortification(_player: Actor, follower: Actor, follower_fov: Dictionary, is_large: bool) -> bool:
 	var loop := true
 	var action_done := false
-	var map: Map = player.location.map
+	var map: Map = _player.location.map
 	var highlighted_tile: Variant = null  # Vector2i or null
 	var highlight_color := Color.WHITE
 
@@ -6900,7 +6889,7 @@ func handle_player_order_follower_to_build_fortification(player: Actor, follower
 						highlight_color = Color.LIGHT_GREEN
 						# if mouse down, give order.
 						if mouse_buttons != null and mouse_buttons == MOUSE_BUTTON_LEFT:
-							do_give_order_to(player, follower, ActorOrder.new(ActorOrder.ActorTasks.BUILD_LARGE_FORTIFICATION if is_large else ActorOrder.ActorTasks.BUILD_SMALL_FORTIFICATION, Location.new(player.location.map, map_pos)))
+							do_give_order_to(_player, follower, ActorOrder.new(ActorOrder.ActorTasks.BUILD_LARGE_FORTIFICATION if is_large else ActorOrder.ActorTasks.BUILD_SMALL_FORTIFICATION, Location.new(_player.location.map, map_pos)))
 							loop = false
 							action_done = true
 					else:
@@ -6922,10 +6911,10 @@ func handle_player_order_follower_to_build_fortification(player: Actor, follower
 	return action_done
 
 
-func handle_player_order_follower_to_barricade(player: Actor, follower: Actor, follower_fov: Dictionary, to_the_max: bool) -> bool:
+func handle_player_order_follower_to_barricade(_player: Actor, follower: Actor, follower_fov: Dictionary, to_the_max: bool) -> bool:
 	var loop := true
 	var action_done := false
-	var map: Map = player.location.map
+	var map: Map = _player.location.map
 	var highlighted_tile: Variant = null  # Vector2i or null
 	var highlight_color := Color.WHITE
 
@@ -6966,7 +6955,7 @@ func handle_player_order_follower_to_barricade(player: Actor, follower: Actor, f
 							highlight_color = Color.LIGHT_GREEN
 							# if mouse down, give order.
 							if mouse_buttons != null and mouse_buttons == MOUSE_BUTTON_LEFT:
-								do_give_order_to(player, follower, ActorOrder.new(ActorOrder.ActorTasks.BARRICADE_MAX if to_the_max else ActorOrder.ActorTasks.BARRICADE_ONE, door.location))
+								do_give_order_to(_player, follower, ActorOrder.new(ActorOrder.ActorTasks.BARRICADE_MAX if to_the_max else ActorOrder.ActorTasks.BARRICADE_ONE, door.location))
 								loop = false
 								action_done = true
 						else:
@@ -6990,10 +6979,10 @@ func handle_player_order_follower_to_barricade(player: Actor, follower: Actor, f
 	# return if we did an action.
 	return action_done
 
-func handle_player_order_follower_to_guard(player: Actor, follower: Actor, follower_fov: Dictionary) -> bool:
+func handle_player_order_follower_to_guard(_player: Actor, follower: Actor, follower_fov: Dictionary) -> bool:
 	var loop := true
 	var action_done := false
-	var map: Map = player.location.map
+	var map: Map = _player.location.map
 	var highlighted_tile: Variant = null  # Vector2i or null
 	var highlight_color := Color.WHITE
 
@@ -7032,7 +7021,7 @@ func handle_player_order_follower_to_guard(player: Actor, follower: Actor, follo
 						highlight_color = Color.LIGHT_GREEN
 						# if mouse down, give order.
 						if mouse_buttons != null and mouse_buttons == MOUSE_BUTTON_LEFT:
-							do_give_order_to(player, follower, ActorOrder.new(ActorOrder.ActorTasks.GUARD, Location.new(map, map_pos)))
+							do_give_order_to(_player, follower, ActorOrder.new(ActorOrder.ActorTasks.GUARD, Location.new(map, map_pos)))
 							loop = false
 							action_done = true
 					else:
@@ -7053,10 +7042,10 @@ func handle_player_order_follower_to_guard(player: Actor, follower: Actor, follo
 	return action_done
 
 
-func handle_player_order_follower_to_patrol(player: Actor, follower: Actor, follower_fov: Dictionary) -> bool:
+func handle_player_order_follower_to_patrol(_player: Actor, follower: Actor, follower_fov: Dictionary) -> bool:
 	var loop := true
 	var action_done := false
-	var map: Map = player.location.map
+	var map: Map = _player.location.map
 	var highlighted_tile: Variant = null  # Vector2i or null
 	var highlight_color := Color.WHITE
 
@@ -7113,7 +7102,7 @@ func handle_player_order_follower_to_patrol(player: Actor, follower: Actor, foll
 						highlight_color = Color.LIGHT_GREEN
 						# if mouse down, give order.
 						if mouse_buttons != null and mouse_buttons == MOUSE_BUTTON_LEFT:
-							do_give_order_to(player, follower, ActorOrder.new(ActorOrder.ActorTasks.PATROL, Location.new(map, map_pos)))
+							do_give_order_to(_player, follower, ActorOrder.new(ActorOrder.ActorTasks.PATROL, Location.new(map, map_pos)))
 							loop = false
 							action_done = true
 					else:
@@ -7134,16 +7123,16 @@ func handle_player_order_follower_to_patrol(player: Actor, follower: Actor, foll
 	return action_done
 
 
-func handle_player_order_follower_to_drop_all_items(player: Actor, follower: Actor) -> bool:
+func handle_player_order_follower_to_drop_all_items(_player: Actor, follower: Actor) -> bool:
 	# if no items, nothing to drop.
 	if follower.inventory.is_empty:
 		return false
 
 	# do give order.
-	do_give_order_to(player, follower, ActorOrder.new(ActorOrder.ActorTasks.DROP_ALL_ITEMS, follower.location))
+	do_give_order_to(_player, follower, ActorOrder.new(ActorOrder.ActorTasks.DROP_ALL_ITEMS, follower.location))
 
 	# emote.
-	do_say(follower, player, "Well ok...", Sayflags.IS_FREE_ACTION)
+	do_say(follower, _player, "Well ok...", Sayflags.IS_FREE_ACTION)
 
 	# update trust. 1 give item penalty per items to drop.
 	modify_actor_trust_in_leader(follower, follower.inventory.count_items * Rules.TRUST_GIVE_ITEM_ORDER_PENALTY, true)
@@ -7152,38 +7141,38 @@ func handle_player_order_follower_to_drop_all_items(player: Actor, follower: Act
 	return true
 
 
-func handle_player_order_follower_to_report(player: Actor, follower: Actor) -> bool:
+func handle_player_order_follower_to_report(_player: Actor, follower: Actor) -> bool:
 	# just give the order.
-	do_give_order_to(player, follower, ActorOrder.new(ActorOrder.ActorTasks.REPORT_EVENTS, follower.location))
+	do_give_order_to(_player, follower, ActorOrder.new(ActorOrder.ActorTasks.REPORT_EVENTS, follower.location))
 
 	# done.
 	return true
 
 
-func handle_player_order_follower_to_sleep(player: Actor, follower: Actor) -> bool:
+func handle_player_order_follower_to_sleep(_player: Actor, follower: Actor) -> bool:
 	# just give the order.
-	do_give_order_to(player, follower, ActorOrder.new(ActorOrder.ActorTasks.SLEEP_NOW, follower.location))
+	do_give_order_to(_player, follower, ActorOrder.new(ActorOrder.ActorTasks.SLEEP_NOW, follower.location))
 
 	# done.
 	return true
 
 
-func handle_player_order_follower_to_toggle_follow(player: Actor, follower: Actor) -> bool:
+func handle_player_order_follower_to_toggle_follow(_player: Actor, follower: Actor) -> bool:
 	# just give the order.
-	do_give_order_to(player, follower, ActorOrder.new(ActorOrder.ActorTasks.FOLLOW_TOGGLE, follower.location))
+	do_give_order_to(_player, follower, ActorOrder.new(ActorOrder.ActorTasks.FOLLOW_TOGGLE, follower.location))
 
 	# done.
 	return true
 
 
-func handle_player_order_follower_to_report_position(player: Actor, follower: Actor) -> bool:
+func handle_player_order_follower_to_report_position(_player: Actor, follower: Actor) -> bool:
 	# just give the order.
-	do_give_order_to(player, follower, ActorOrder.new(ActorOrder.ActorTasks.WHERE_ARE_YOU, follower.location))
+	do_give_order_to(_player, follower, ActorOrder.new(ActorOrder.ActorTasks.WHERE_ARE_YOU, follower.location))
 
 	# done.
 	return true
 
-func handle_player_order_follower_to_give_items(player: Actor, follower: Actor) -> bool:
+func handle_player_order_follower_to_give_items(_player: Actor, follower: Actor) -> bool:
 	# sanity checks.
 	if follower.inventory == null or follower.inventory.is_empty:
 		clear_messages()
@@ -7191,7 +7180,7 @@ func handle_player_order_follower_to_give_items(player: Actor, follower: Actor) 
 		add_message_press_enter()
 		return false
 	# must be adjacent.
-	if player.location.map != follower.location.map or not rules.is_adjacent(player.location.position, follower.location.position):
+	if _player.location.map != follower.location.map or not rules.is_adjacent(_player.location.position, follower.location.position):
 		clear_messages()
 		add_message(make_error_message("%s is not next to you." % follower.the_name))
 		add_message_press_enter()
@@ -7237,9 +7226,9 @@ func handle_player_order_follower_to_give_items(player: Actor, follower: Actor) 
 			var it: Item = fo_inventory.get_item_at(i)
 
 			# try to do it.
-			var give_res: Dictionary = rules.can_actor_give_item_to(follower, player, it)
+			var give_res: Dictionary = rules.can_actor_give_item_to(follower, _player, it)
 			if give_res.ok:
-				do_give_item_to(follower, player, it)
+				do_give_item_to(follower, _player, it)
 				loop = false
 				action_done = true
 			else:
@@ -7253,6 +7242,11 @@ func handle_player_order_follower_to_give_items(player: Actor, follower: Actor) 
 
 
 func handle_ai_actor(ai_actor: Actor) -> void:
+	# Guard: actor may have been removed from its map by a chain reaction
+	# (explosion, trap) earlier this turn; skip if location is invalid.
+	if ai_actor.location == null or ai_actor.location.map == null:
+		spend_actor_action_points(ai_actor, Rules.BASE_ACTION_COST)
+		return
 	# Get and perform action from AI controler.
 	var desired_action: ActorAction = ai_actor.controller.get_action(self)
 
@@ -7274,10 +7268,15 @@ func handle_ai_actor(ai_actor: Actor) -> void:
 			do_wait(ai_actor)
 			do_emote(ai_actor, "My AI attempted an illegal action, I'll  wait instead of crashing your game :)", true)
 	else:
-		push_error("AI returned null action.")
+		# Safety net: BaseAI.get_action falls back to ActionWait, so this
+		# should never fire; warn (not error) since the game recovers.
+		push_warning("AI returned null action, forcing a wait.")
+		# Spend AP so the actor doesn't get re-selected in an infinite loop.
+		spend_actor_action_points(ai_actor, Rules.BASE_ACTION_COST)
+		do_wait(ai_actor)
 
 
-func handle_advisor(p_player: Actor) -> void:
+func handle_advisor(_p_player: Actor) -> void:
 	# If all hints given, say so.
 	if hints.has_advisor_given_all_hints():
 		show_advisor_message("YOU KNOW THE BASICS!", [
@@ -7945,7 +7944,7 @@ func wait_key_or_mouse() -> Dictionary:
 		else:
 			mouse_pos = ui.ui_get_mouse_position()
 			var buttons: int = ui.ui_peek_mouse_buttons()
-			mouse_buttons = buttons if buttons != 0 else null
+			mouse_buttons = (buttons as Variant) if buttons != 0 else null
 			if mouse_pos != prev_mouse_pos or mouse_buttons != null:
 				return {"key": null, "mouse_pos": mouse_pos, "mouse_buttons": mouse_buttons}
 	return {}
@@ -8933,28 +8932,28 @@ func describe_item_light(lt: ItemLight) -> Array:
 	return lines
 
 
-func describe_item_tracker(tr: ItemTracker) -> Array:
+func describe_item_tracker(_tr: ItemTracker) -> Array:
 	var lines: Array = []
 
-	var m: ItemTrackerModel = tr.model as ItemTrackerModel
+	var m: ItemTrackerModel = _tr.model as ItemTrackerModel
 
 	lines.append("> tracker")
 
 	# 1. Batteries
-	lines.append(describe_batteries(tr.batteries, m.max_batteries))
+	lines.append(describe_batteries(_tr.batteries, m.max_batteries))
 	# alpha10 range if applicable
-	if tr.can_track_undeads():
+	if _tr.can_track_undeads():
 		lines.append("Range: %d" % Rules.ZTRACKINGRADIUS)
 	else:
 		lines.append("Range: whole map")
 
 	# alpha10
 	# 2. Clock
-	if tr.has_clock():
+	if _tr.has_clock():
 		lines.append(" ")
-		if tr.batteries == 0:
+		if _tr.batteries == 0:
 			lines.append("Out of batteries, can't give the time.")
-		elif not tr.is_equipped:
+		elif not _tr.is_equipped:
 			lines.append("Equip the item to read the time.")
 		else:
 			lines.append("The clock reads: %dh, %s" % [session.world_time.hour, describe_day_phase(session.world_time.phase)])
@@ -8962,30 +8961,30 @@ func describe_item_tracker(tr: ItemTracker) -> Array:
 	return lines
 
 
-func describe_item_trap(tr: ItemTrap) -> Array:
+func describe_item_trap(_tr: ItemTrap) -> Array:
 	var lines: Array = []
 
-	var m: ItemTrapModel = tr.model as ItemTrapModel
+	var m: ItemTrapModel = _tr.model as ItemTrapModel
 
 	lines.append("> trap")
 
 	# 1. Status
-	if tr.is_activated():
+	if _tr.is_activated():
 		lines.append("** Activated! **")
 		# alpha10
-		if rules.is_safe_from_trap(tr, player):
+		if rules.is_safe_from_trap(_tr, player):
 			lines.append("You will safely avoid this trap.")
-			if tr.owner != null:
-				lines.append("Trap setup by %s." % tr.owner.the_name)
-	elif tr.is_triggered:
+			if _tr.owner != null:
+				lines.append("Trap setup by %s." % _tr.owner.the_name)
+	elif _tr.is_triggered:
 		# alpha10
 		lines.append("** Triggered! **")
-		if rules.is_safe_from_trap(tr, player):
+		if rules.is_safe_from_trap(_tr, player):
 			lines.append("You will safely avoid this trap.")
-			if tr.owner != null:
-				lines.append("Trap setup by %s." % tr.owner.the_name)
+			if _tr.owner != null:
+				lines.append("Trap setup by %s." % _tr.owner.the_name)
 	# alpha10
-	lines.append("Trigger chance for you : %d%%." % rules.get_trap_trigger_chance(tr, player))
+	lines.append("Trigger chance for you : %d%%." % rules.get_trap_trigger_chance(_tr, player))
 
 	# 2. Flags
 	if m.is_one_time_use():
@@ -8996,8 +8995,8 @@ func describe_item_trap(tr: ItemTrap) -> Array:
 		lines.append("Use to activate.")
 
 	# 3. Stats
-	lines.append("Damage  : %d x%d = %d" % [m.damage, tr.quantity, tr.quantity * m.damage])  # alpha10
-	lines.append("Trigger : %d%% x%d = %d%%" % [m.trigger_chance, tr.quantity, tr.quantity * m.trigger_chance])  # alpha10
+	lines.append("Damage  : %d x%d = %d" % [m.damage, _tr.quantity, _tr.quantity * m.damage])  # alpha10
+	lines.append("Trigger : %d%% x%d = %d%%" % [m.trigger_chance, _tr.quantity, _tr.quantity * m.trigger_chance])  # alpha10
 	lines.append("Break   : %d%%" % m.break_chance)
 	if m.block_chance > 0:
 		lines.append("Block   : %d%%" % m.block_chance)
@@ -9326,7 +9325,7 @@ func on_actor_enter_tile(actor: Actor) -> void:
 func try_actor_leave_tile(actor: Actor) -> bool:
 	var map: Map = actor.location.map
 	var pos: Vector2i = actor.location.position
-	var can_leave: bool = true
+	var can_leave := [true]
 
 	# Check traps.
 	if not rules.is_trap_covering_map_object_there(map, pos):
@@ -9342,14 +9341,14 @@ func try_actor_leave_tile(actor: Actor) -> bool:
 				var escape_res: Dictionary = try_escape_trap(trap, actor)
 				var is_destroyed: bool = escape_res.get("is_destroyed", false)
 				if not escape_res.ok:
-					can_leave = false
+					can_leave[0] = false
 					continue
 				if is_destroyed:
 					remove_them.append(it)
 			for it in remove_them:
 				map.remove_item_at(it, pos)
 			# if can leave, force un-trigger all traps.
-			if can_leave and has_triggered_traps:
+			if can_leave[0] and has_triggered_traps:
 				untrigger_all_traps_here(actor.location)
 
 	# Check adjacent Z-Grabs
@@ -9370,10 +9369,10 @@ func try_actor_leave_tile(actor: Actor) -> bool:
 			if visible:
 				add_message(make_message(grabber, conjugate(grabber, VERB_GRAB), actor))
 			# stuck there!
-			can_leave = false
+			can_leave[0] = false
 	)
 
-	return can_leave
+	return can_leave[0]
 #endregion
 
 #region Traps (C# lines 12930+)
@@ -10598,7 +10597,7 @@ func do_trade(speaker: Actor, target: Actor) -> void:
 		speaker_ai = speaker.controller as BaseAI
 
 	# get an item the speaker would like from target inventory.
-	var asked_rating: int = 0
+	var asked_rating := [0]
 	var pick_asked_item := func() -> Item:
 		# pick an item in target inventory the speaker wants, or any item if target has only junk.
 		var wants: Array[Item] = target.inventory.filter(func(it: Item) -> bool:
@@ -10614,7 +10613,7 @@ func do_trade(speaker: Actor, target: Actor) -> void:
 
 		# pick one from the wanted list.
 		var want_it: Item = wants[rules.roll(0, wants.size())]
-		asked_rating = speaker_ai.rate_item(self, want_it, false)
+		asked_rating[0] = speaker_ai.rate_item(self, want_it, false)
 		return want_it
 
 	# can return null
@@ -10638,11 +10637,11 @@ func do_trade(speaker: Actor, target: Actor) -> void:
 				if it.model == asked_item.model:
 					return false
 				# read target ai mind...
-				var tr: int = target_ai.rate_trade_offer(self, speaker, it, asked_item)
+				var _tr: int = target_ai.rate_trade_offer(self, speaker, it, asked_item)
 				# accept "Maybe" items to be a bit more realistic in not always making perfect deals
 				# ("hey! the ai always accept ai trades! they are cheating!")
 				# and let charisma influence the final result.
-				return tr != BaseAI.TradeRating.REFUSE
+				return _tr != BaseAI.TradeRating.REFUSE
 			)
 
 		if offerables.size() == 0:
@@ -10653,7 +10652,7 @@ func do_trade(speaker: Actor, target: Actor) -> void:
 		return offer_it
 
 	asked = pick_asked_item.call()
-	offered = pick_offered_item.call(asked, asked_rating)
+	offered = pick_offered_item.call(asked, asked_rating[0])
 
 	# if no item pairs found, failed trade.
 	# either the target has no interesting items for speaker,
@@ -12374,9 +12373,9 @@ func handle_post_mortem() -> void:
 	var death_time := WorldTime.new()
 	death_time.turn_counter = session.scoring.turns_survived
 	var is_male := player.model.doll_body.is_male
-	var he_or_she := "He" if is_male else "She"
-	var his_or_her := his_or_her(player)
-	var him_or_her := "him" if is_male else "her"
+	var _he_or_she := "He" if is_male else "She"
+	var _his_or_her := his_or_her(player)
+	var _him_or_her := "him" if is_male else "her"
 	var pname := player.the_name.replace("(YOU) ", "")
 	var real_time_string := time_span_to_string(session.scoring.real_life_playing_time)
 	session.scoring.side = Scoring.DifficultySide.FOR_UNDEAD if player.model.abilities.is_undead else Scoring.DifficultySide.FOR_SURVIVOR
@@ -12393,14 +12392,14 @@ func handle_post_mortem() -> void:
 
 	#region Summary
 	graveyard.append("%s was %s and %s." % [pname, a_or_an(player.model.name), a_or_an(player.faction.member_name)])
-	graveyard.append("%s survived to see %s." % [he_or_she, str(death_time)])
-	graveyard.append("%s's spirit guided %s for %s." % [pname, him_or_her, real_time_string])
+	graveyard.append("%s survived to see %s." % [_he_or_she, str(death_time)])
+	graveyard.append("%s's spirit guided %s for %s." % [pname, _him_or_her, real_time_string])
 	if session.scoring.reincarnation_number > 0:
-		graveyard.append("%s was reincarnation %d." % [he_or_she, session.scoring.reincarnation_number])
+		graveyard.append("%s was reincarnation %d." % [_he_or_she, session.scoring.reincarnation_number])
 	graveyard.append(" ")
 
 	graveyard.append("> SCORING")
-	graveyard.append("%s scored a total of %d points." % [he_or_she, session.scoring.total_points])
+	graveyard.append("%s scored a total of %d points." % [_he_or_she, session.scoring.total_points])
 	graveyard.append("- difficulty rating of %d%%." % int(100 * session.scoring.difficulty_rating))
 	graveyard.append("- %d base points for survival." % session.scoring.survival_points)
 	graveyard.append("- %d base points for kills." % session.scoring.kill_points)
@@ -12409,6 +12408,8 @@ func handle_post_mortem() -> void:
 
 	graveyard.append("> ACHIEVEMENTS")
 	for ach in session.scoring.achievements:
+		if ach == null:
+			continue
 		if ach.is_done:
 			graveyard.append("- %s for %d points!" % [ach.name, ach.score_value])
 		else:
@@ -12431,7 +12432,7 @@ func handle_post_mortem() -> void:
 
 	graveyard.append("> KILLS")
 	if session.scoring.has_no_kills:
-		graveyard.append("%s was a pacifist. Or too scared to fight." % he_or_she)
+		graveyard.append("%s was a pacifist. Or too scared to fight." % _he_or_she)
 	else:
 		# models kill list.
 		for kill_data in session.scoring.kills:
@@ -12440,7 +12441,7 @@ func handle_post_mortem() -> void:
 	# murders? only livings.
 	if not player.model.abilities.is_undead:
 		if player.murders_counter > 0:
-			graveyard.append("%s committed %d murder%s!" % [he_or_she, player.murders_counter, "s" if player.murders_counter > 1 else ""])
+			graveyard.append("%s committed %d murder%s!" % [_he_or_she, player.murders_counter, "s" if player.murders_counter > 1 else ""])
 
 	graveyard.append(" ")
 
@@ -12453,7 +12454,7 @@ func handle_post_mortem() -> void:
 
 	graveyard.append("> SKILLS")
 	if player.sheet.skill_table.skills() == null:
-		graveyard.append("%s was a jack of all trades. Or an incompetent." % he_or_she)
+		graveyard.append("%s was a jack of all trades. Or an incompetent." % _he_or_she)
 	else:
 		for sk in player.sheet.skill_table.skills():
 			graveyard.append("%d-%s." % [sk.level, Skills.name(sk.id)])
@@ -12461,7 +12462,7 @@ func handle_post_mortem() -> void:
 
 	graveyard.append("> INVENTORY")
 	if player.inventory.is_empty:
-		graveyard.append("%s was humble. Or dirt poor." % he_or_she)
+		graveyard.append("%s was humble. Or dirt poor." % _he_or_she)
 	else:
 		for it in player.inventory.items:
 			var desc := describe_item_short(it)
@@ -12473,10 +12474,10 @@ func handle_post_mortem() -> void:
 
 	graveyard.append("> FOLLOWERS")
 	if session.scoring.followers_when_died == null or session.scoring.followers_when_died.size() == 0:
-		graveyard.append("%s was doing fine alone. Or everyone else was dead." % he_or_she)
+		graveyard.append("%s was doing fine alone. Or everyone else was dead." % _he_or_she)
 	else:
 		# names.
-		var sb := "%s was leading" % he_or_she
+		var sb := "%s was leading" % _he_or_she
 		var first_fo := true
 		var i := 0
 		var count: int = session.scoring.followers_when_died.size()
@@ -12506,12 +12507,12 @@ func handle_post_mortem() -> void:
 
 	graveyard.append("> EVENTS")
 	if session.scoring.has_no_events:
-		graveyard.append("%s had a quiet life. Or dull and boring." % he_or_she)
+		graveyard.append("%s had a quiet life. Or dull and boring." % _he_or_she)
 	else:
 		for ev in session.scoring.events:
 			var ev_time := WorldTime.new()
 			ev_time.turn_counter = ev.turn
-			graveyard.append("%13s : %s" % [str(ev_time), ev.text])
+			graveyard.append("- %13s : %s" % [str(ev_time), ev.text])
 	graveyard.append(" ")
 
 	graveyard.append("> CUSTOM OPTIONS")
@@ -12798,7 +12799,7 @@ func handle_player_decide_upgrade(upgrade_actor: Actor) -> void:
 		var in_key := ui.ui_wait_key()
 
 		# 3. Handle input
-		var command := InputTranslator.key_to_command(in_key) # == PlayerCommand.EXIT_OR_CANCEL when ESC
+		var _command := InputTranslator.key_to_command(in_key) # == PlayerCommand.EXIT_OR_CANCEL when ESC
 		if in_key.keycode == KEY_ESCAPE:
 			loop = false
 			if popup != null:
@@ -13229,7 +13230,7 @@ func is_in_view_rect(map_position: Vector2i) -> bool:
 
 func redraw_play_screen() -> void:
 	# alpha10 dont display some infos
-	var can_see_sky := rules.can_actor_see_sky(player)
+	var _can_see_sky := rules.can_actor_see_sky(player)
 	var can_know_time := rules.can_actor_know_time(player)
 
 	# Monitor.Enter/Exit(m_UI) skipped: the Godot port runs single-threaded.
@@ -13802,7 +13803,7 @@ func draw_actor_equipment(actor: Actor, gx: int, gy: int, part: Doll.DollPart, t
 	ui.ui_draw_image_tint(it.image_id(), gx, gy, tint)
 
 
-func draw_corpse(c: Corpse, gx: int, gy: int, tint: Color) -> void:
+func draw_corpse(c: Corpse, gx: int, gy: int, _tint: Color) -> void:
 	var rotation := c.rotation
 	var scale := c.scale
 	var offset := 0  # TILE_SIZE / 2
@@ -13944,7 +13945,7 @@ func draw_map_icon(position: Vector2i, image_id: String) -> void:
 func draw_map_health_bar(hit_points: int, max_hit_points: int, gx: int, gy: int, bar_color: Color = Color.RED) -> void:
 	var hp_x := gx + 4
 	var hp_y := gy + TILE_SIZE - 4
-	var bar_length := int(20 * float(hit_points) / float(max_hit_points))
+	var bar_length := 0 if max_hit_points <= 0 else int(20 * float(hit_points) / float(max_hit_points))
 	ui.ui_fill_rect(Color.BLACK, Rect2i(hp_x, hp_y, 20, 4))
 	if bar_length > 0:
 		ui.ui_fill_rect(bar_color, Rect2i(hp_x + 1, hp_y + 1, bar_length, 2))
@@ -13954,8 +13955,11 @@ func draw_bar(value: int, previous_value: int, max_value: int, ref_value: int, m
 		fill_color: Color, loss_fill_color: Color, gain_fill_color: Color, empty_color: Color) -> void:
 	ui.ui_fill_rect(empty_color, Rect2i(gx, gy, max_width, height))
 
-	var prev_bar_length := int(max_width * float(previous_value) / float(max_value))
-	var bar_length := int(max_width * float(value) / float(max_value))
+	var prev_bar_length := 0
+	var bar_length := 0
+	if max_value > 0:
+		prev_bar_length = int(max_width * float(previous_value) / float(max_value))
+		bar_length = int(max_width * float(value) / float(max_value))
 
 	if value > previous_value:
 		# gain
@@ -13975,7 +13979,7 @@ func draw_bar(value: int, previous_value: int, max_value: int, ref_value: int, m
 			ui.ui_fill_rect(fill_color, Rect2i(gx, gy, bar_length, height))
 
 	# reference line.
-	var ref_length := int(max_width * float(ref_value) / float(max_value))
+	var ref_length := 0 if max_value <= 0 else int(max_width * float(ref_value) / float(max_value))
 	ui.ui_draw_line(Color.WHITE, gx + ref_length, gy, gx + ref_length, gy + height)
 
 
@@ -14296,10 +14300,10 @@ func draw_inventory(inventory: Inventory, title: String, draw_slots_numbers: boo
 				ui.ui_draw_image(GameImages.ICON_OUT_OF_BATTERIES, x, y)
 			draw_bar(lt.batteries, lt.batteries, (lt.model as ItemLightModel).max_batteries, 0, 28, 3, x + 2, y + 27, Color.YELLOW, Color.YELLOW, Color.YELLOW, Color.DARK_GRAY)
 		elif it is ItemTracker:
-			var tr := it as ItemTracker
-			if tr.batteries <= 0:
+			var _tr := it as ItemTracker
+			if _tr.batteries <= 0:
 				ui.ui_draw_image(GameImages.ICON_OUT_OF_BATTERIES, x, y)
-			draw_bar(tr.batteries, tr.batteries, (tr.model as ItemTrackerModel).max_batteries, 0, 28, 3, x + 2, y + 27, Color.PINK, Color.PINK, Color.PINK, Color.DARK_GRAY)
+			draw_bar(_tr.batteries, _tr.batteries, (_tr.model as ItemTrackerModel).max_batteries, 0, 28, 3, x + 2, y + 27, Color.PINK, Color.PINK, Color.PINK, Color.DARK_GRAY)
 		elif it is ItemFood:
 			var food := it as ItemFood
 			if rules.is_food_expired(food, session.world_time.turn_counter):
@@ -14633,7 +14637,7 @@ func save_options() -> void:
 	GameOptions.save(options, get_user_options_file_path())
 
 
-func apply_options(ingame: bool) -> void:
+func apply_options(_ingame: bool) -> void:
 	if music_manager != null:
 		music_manager.is_music_enabled = options.play_music
 		music_manager.volume = options.music_volume
@@ -15034,7 +15038,7 @@ func generate_world(is_verbose: bool, size: int) -> void:
 		ui.ui_repaint()
 
 
-func check_if_exit_is_good(from_map: Map, from: Vector2i, to_map: Map, to: Vector2i) -> bool:
+func check_if_exit_is_good(_from_map: Map, _from: Vector2i, to_map: Map, to: Vector2i) -> bool:
 	# don't if tile not walkable or map object there
 	if not to_map.get_tile_at(to.x, to.y).model.is_walkable:
 		return false
@@ -15069,7 +15073,7 @@ func spawn_unique_sewers_thing(world: World) -> Session.UniqueActor:
 			func(pt: Vector2i) -> bool:
 				return map.is_walkable(pt.x, pt.y) and map.get_actor_at(pt) == null and map.get_items_at(pt) == null,
 			roller,
-			func(pt: Vector2i) -> Board:
+			func(_pt: Vector2i) -> Board:
 				return town_generator.make_obj_board(GameImages.OBJ_BOARD, PackedStringArray([
 					"TO SEWER WORKERS :",
 					"- It lives here.",
@@ -15085,7 +15089,7 @@ func spawn_unique_sewers_thing(world: World) -> Session.UniqueActor:
 	return u
 
 
-func create_unique_big_bear(world: World) -> Session.UniqueActor:
+func create_unique_big_bear(_world: World) -> Session.UniqueActor:
 	var model: ActorModel = game_actors.male_civilian()
 	var actor: Actor = model.create_named(game_factions.the_civilians(), "Big Bear", false, 0)
 	actor.is_unique = true
@@ -15112,7 +15116,7 @@ func create_unique_big_bear(world: World) -> Session.UniqueActor:
 	return u
 
 
-func create_unique_famu_fataru(world: World) -> Session.UniqueActor:
+func create_unique_famu_fataru(_world: World) -> Session.UniqueActor:
 	var model: ActorModel = game_actors.female_civilian()
 	var actor: Actor = model.create_named(game_factions.the_civilians(), "Famu Fataru", false, 0)
 	actor.is_unique = true
@@ -15139,7 +15143,7 @@ func create_unique_famu_fataru(world: World) -> Session.UniqueActor:
 	return u
 
 
-func create_unique_santaman(world: World) -> Session.UniqueActor:
+func create_unique_santaman(_world: World) -> Session.UniqueActor:
 	var model: ActorModel = game_actors.male_civilian()
 	var actor: Actor = model.create_named(game_factions.the_civilians(), "Santaman", false, 0)
 	actor.is_unique = true
@@ -15168,7 +15172,7 @@ func create_unique_santaman(world: World) -> Session.UniqueActor:
 	return u
 
 
-func create_unique_roguedjack(world: World) -> Session.UniqueActor:
+func create_unique_roguedjack(_world: World) -> Session.UniqueActor:
 	var model: ActorModel = game_actors.male_civilian()
 	var actor: Actor = model.create_named(game_factions.the_civilians(), "Roguedjack", false, 0)
 	actor.is_unique = true
@@ -15195,7 +15199,7 @@ func create_unique_roguedjack(world: World) -> Session.UniqueActor:
 	return u
 
 
-func create_unique_duckman(world: World) -> Session.UniqueActor:
+func create_unique_duckman(_world: World) -> Session.UniqueActor:
 	var model: ActorModel = game_actors.male_civilian()
 	var actor: Actor = model.create_named(game_factions.the_civilians(), "Duckman", false, 0)
 	actor.is_unique = true
@@ -15222,7 +15226,7 @@ func create_unique_duckman(world: World) -> Session.UniqueActor:
 	return u
 
 
-func create_unique_hans_von_hanz(world: World) -> Session.UniqueActor:
+func create_unique_hans_von_hanz(_world: World) -> Session.UniqueActor:
 	var model: ActorModel = game_actors.male_civilian()
 	var actor: Actor = model.create_named(game_factions.the_civilians(), "Hans von Hanz", false, 0)
 	actor.is_unique = true
@@ -15321,7 +15325,7 @@ func create_unique_map_char_undeground_facility(world: World) -> Session.UniqueM
 
 # --- District maps (RogueGame.cs ~20948) ---
 
-func generate_district_kind(world: World, grid_x: int, grid_y: int) -> int:
+func generate_district_kind(_world: World, grid_x: int, grid_y: int) -> int:
 	# Decide district kind - some districts are hardcoded: (0,0) is always Business
 	if grid_x == 0 and grid_y == 0:
 		return District.DistrictKind.BUSINESS
@@ -15662,7 +15666,7 @@ func start_sim_thread() -> void:
 	pass
 
 
-func stop_sim_thread(abort: bool) -> void:
+func stop_sim_thread(_abort: bool) -> void:
 	pass
 
 
@@ -15703,7 +15707,7 @@ func show_new_achievement(id: int) -> void:
 
 # --- Special player events (RogueGame.cs ~21660) ---
 
-func show_special_dialogue(speaker: Actor, text: Array) -> void:
+func show_special_dialogue(_speaker: Actor, _text: Array) -> void:
 	# music
 	music_manager.stop()
 	music_manager.play(GameMusics.INTERLUDE, MusicPriority.PRIORITY_EVENT)
@@ -16227,7 +16231,7 @@ func seeing_cause_insanity(who_does_the_action: Actor, loc: Location, san_cost: 
 			elif is_visible_to_player(a):
 				add_message(make_message(a, "%s something very disturbing..." % conjugate(a, VERB_SEE)))
 
-func on_map_power_generator_switch(location: Location, pow_gen: PowerGenerator) -> void:
+func on_map_power_generator_switch(location: Location, _pow_gen: PowerGenerator) -> void:
 	var map: Map = location.map
 	#--////////////////////////////////////////////////
 	# Maps:
@@ -16625,7 +16629,7 @@ func add_dev_cheat_skills() -> void:
 func add_dev_misc_stuff() -> void:
 	pass
 
-func draw_tile_dev(m: Map, t: Tile, x: int, y: int, to_screen: Vector2i) -> void:
+func draw_tile_dev(_m: Map, _t: Tile, _x: int, _y: int, _to_screen: Vector2i) -> void:
 	pass
 
 
@@ -16642,7 +16646,7 @@ func shutdown() -> void:
 	player_fov.clear()
 	hint_available_overlay = null
 	town_generator = null
-	music_manager = null
+	music_manager = NullMusicManager.new()
 	char_gen = null
 	manual = null
 	game_factions = null

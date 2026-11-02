@@ -265,6 +265,7 @@ enum SaveFormat {
 
 # Game Mode
 var game_mode: GameMode = GameMode.GM_STANDARD
+@warning_ignore("shadowed_global_identifier")
 var seed: int = 0
 var last_turn_player_acted: int = 0
 
@@ -320,6 +321,10 @@ func _init() -> void:
 
 
 func reset() -> void:
+	# NOTE: seed is derived from the wall-clock time, so each new game gets a
+	# different seed and runs are not reproducible by default. To replay a
+	# specific run (debugging, regression tests), set session.seed explicitly
+	# after reset() and before world generation.
 	seed = int(Time.get_unix_time_from_system() * 1000000.0) % 2147483647
 	current_map = null
 	scoring = new_scoring()
@@ -474,11 +479,23 @@ static func map_ref(map: Map) -> Dictionary:
 	}
 
 
-static func map_from_ref(world: World, ref: Dictionary) -> Map:
-	if world == null || ref == null || ref.is_empty():
+static func map_from_ref(_world: World, ref: Dictionary) -> Map:
+	if _world == null || ref == null || ref.is_empty():
 		return null
-	var district: District = world.get_district(ref["district_x"], ref["district_y"])
-	return district.get_map(ref["map_index"])
+	var dx: int = ref.get("district_x", -1)
+	var dy: int = ref.get("district_y", -1)
+	if dx < 0 or dx >= _world.size or dy < 0 or dy >= _world.size:
+		push_warning("map_from_ref: district (%d,%d) out of world bounds %d" % [dx, dy, _world.size])
+		return null
+	var district: District = _world.districts_grid[dx * _world.size + dy]
+	if district == null:
+		push_warning("map_from_ref: null district at (%d,%d)" % [dx, dy])
+		return null
+	var mi: int = ref.get("map_index", -1)
+	if mi < 0 or mi >= district.maps.size():
+		push_warning("map_from_ref: map_index %d out of range (district has %d maps)" % [mi, district.maps.size()])
+		return null
+	return district.maps[mi]
 
 
 ## Serialize a reference to an actor inside the world graph :
@@ -492,13 +509,17 @@ static func actor_ref(actor: Actor) -> Dictionary:
 	return ref
 
 
-static func actor_from_ref(world: World, ref: Dictionary) -> Actor:
-	if world == null || ref == null || ref.is_empty():
+static func actor_from_ref(_world: World, ref: Dictionary) -> Actor:
+	if _world == null || ref == null || ref.is_empty():
 		return null
-	var map := map_from_ref(world, ref)
+	var map := map_from_ref(_world, ref)
 	if map == null:
 		return null
-	return map.actors_list[ref["actor_index"]]
+	var ai: int = ref.get("actor_index", -1)
+	if ai < 0 or ai >= map.actors_list.size():
+		push_warning("actor_from_ref: actor_index %d out of range (map has %d actors)" % [ai, map.actors_list.size()])
+		return null
+	return map.actors_list[ai]
 
 
 ## Serialize a reference to an item inside the world graph : the item is
@@ -511,12 +532,12 @@ static func item_ref(item: Item) -> Dictionary:
 	return _find_item_map_and_ref(get_session().world, item)
 
 
-static func _find_item_map_and_ref(world: World, item: Item) -> Dictionary:
-	if world == null:
+static func _find_item_map_and_ref(_world: World, item: Item) -> Dictionary:
+	if _world == null:
 		return {}
-	for x: int in world.size:
-		for y: int in world.size:
-			var ref := _find_item_in_map(item, world.get_district(x, y))
+	for x: int in _world.size:
+		for y: int in _world.size:
+			var ref := _find_item_in_map(item, _world.get_district(x, y))
 			if not ref.is_empty():
 				return ref
 	return {}
@@ -548,21 +569,28 @@ static func _find_item_in_map(item: Item, district: District) -> Dictionary:
 	return {}
 
 
-static func item_from_ref(world: World, ref: Dictionary) -> Item:
-	if world == null || ref == null || ref.is_empty():
+static func item_from_ref(_world: World, ref: Dictionary) -> Item:
+	if _world == null || ref == null || ref.is_empty():
 		return null
-	var map := map_from_ref(world, ref)
+	var map := map_from_ref(_world, ref)
 	if map == null:
 		return null
 	match ref.get("holder", ""):
 		"actor":
-			var actor: Actor = map.actors_list[ref["actor_index"]]
+			var ai: int = ref.get("actor_index", -1)
+			if ai < 0 or ai >= map.actors_list.size():
+				push_warning("item_from_ref: actor_index %d out of range" % ai)
+				return null
+			var actor: Actor = map.actors_list[ai]
 			if actor.inventory == null:
 				return null
-			return actor.inventory.get_item_at(ref["item_index"])
+			return actor.inventory.get_item_at(ref.get("item_index", -1))
 		"ground":
-			var inv: Inventory = map.ground_items_by_position[Vector2i(ref["position_x"], ref["position_y"])]
-			return inv.get_item_at(ref["item_index"])
+			var inv: Inventory = map.ground_items_by_position.get(Vector2i(ref.get("position_x", 0), ref.get("position_y", 0)))
+			if inv == null:
+				push_warning("item_from_ref: no ground inventory at (%d,%d)" % [ref.get("position_x", 0), ref.get("position_y", 0)])
+				return null
+			return inv.get_item_at(ref.get("item_index", -1))
 	return null
 
 
@@ -672,7 +700,7 @@ func _deserialize_unique_maps(data) -> void:
 ## C# Save(Session, filepath, format).
 ## The original BIN/SOAP/XML formats are replaced by Godot-native var
 ## serialization ; the format argument is kept for API compatibility.
-static func save(session: Session, filepath: String, format: SaveFormat = SaveFormat.FORMAT_BIN) -> void:
+static func save(session: Session, filepath: String, _format: SaveFormat = SaveFormat.FORMAT_BIN) -> void:
 	assert(session != null, "session")
 	assert(filepath != null, "filepath")
 
@@ -693,7 +721,7 @@ static func save(session: Session, filepath: String, format: SaveFormat = SaveFo
 
 
 ## Try to load, false if failed.
-static func load(filepath: String, format: SaveFormat = SaveFormat.FORMAT_BIN) -> bool:
+static func load(filepath: String, _format: SaveFormat = SaveFormat.FORMAT_BIN) -> bool:
 	assert(filepath != null, "filepath")
 
 	print("loading session...")
@@ -850,12 +878,12 @@ func get_stat_record(d: District, turn: int) -> DistrictStat.Record:
 static func corpse_ref(corpse: Corpse) -> Dictionary:
 	if corpse == null:
 		return {}
-	var world: World = get_session().world
-	if world == null:
+	var _world: World = get_session().world
+	if _world == null:
 		return {}
-	for x: int in world.size:
-		for y: int in world.size:
-			var district: District = world.get_district(x, y)
+	for x: int in _world.size:
+		for y: int in _world.size:
+			var district: District = _world.get_district(x, y)
 			for m: Map in district.maps:
 				var idx: int = m.corpses_list.find(corpse)
 				if idx >= 0:
@@ -865,10 +893,10 @@ static func corpse_ref(corpse: Corpse) -> Dictionary:
 	return {}
 
 
-static func corpse_from_ref(world: World, ref: Dictionary) -> Corpse:
-	if world == null || ref == null || ref.is_empty():
+static func corpse_from_ref(_world: World, ref: Dictionary) -> Corpse:
+	if _world == null || ref == null || ref.is_empty():
 		return null
-	var map := map_from_ref(world, ref)
+	var map := map_from_ref(_world, ref)
 	if map == null:
 		return null
 	var idx: int = ref.get("corpse_index", -1)
@@ -879,20 +907,20 @@ static func corpse_from_ref(world: World, ref: Dictionary) -> Corpse:
 
 ## Resolve any world-graph reference produced by map_ref/actor_ref/corpse_ref.
 ## Arrays are resolved element-wise.
-static func resolve_ref(world: World, ref):
+static func resolve_ref(_world: World, ref):
 	if ref == null or (ref is Dictionary and ref.is_empty()):
 		return null
 	if ref is Array:
 		var out := []
 		for r in ref:
-			out.append(resolve_ref(world, r))
+			out.append(resolve_ref(_world, r))
 		return out
 	if ref.has("corpse_index"):
-		return corpse_from_ref(world, ref)
+		return corpse_from_ref(_world, ref)
 	if ref.has("actor_index"):
-		return actor_from_ref(world, ref)
+		return actor_from_ref(_world, ref)
 	if ref.has("map_index"):
-		return map_from_ref(world, ref)
+		return map_from_ref(_world, ref)
 	return null
 
 
@@ -969,3 +997,34 @@ static func shutdown_all() -> void:
 	if the_session != null:
 		the_session.shutdown()
 		the_session = null
+
+
+## Debug-only: after shutdown(), verify that no dangling references remain
+## in the actor graph (catches RefCounted cycles that would leak memory).
+## Returns the number of non-null refs found (0 = clean).
+static func validate_shutdown_clean(session: Session) -> int:
+	var issues: int = 0
+	if session == null:
+		return 0
+	if session.world != null:
+		issues += 1
+		push_warning("validate_shutdown_clean: session.world not null")
+	if session.current_map != null:
+		issues += 1
+		push_warning("validate_shutdown_clean: session.current_map not null")
+	if session.world_time != null:
+		issues += 1
+		push_warning("validate_shutdown_clean: session.world_time not null")
+	if session.scoring != null:
+		issues += 1
+		push_warning("validate_shutdown_clean: session.scoring not null")
+	if session.unique_actors != null:
+		for ua in session.unique_actors.to_array():
+			if ua != null and ua.the_actor != null:
+				issues += 1
+				push_warning("validate_shutdown_clean: unique_actor.the_actor not null")
+	if session.unique_items != null and session.unique_items.the_subway_worker_badge != null \
+			and session.unique_items.the_subway_worker_badge.the_item != null:
+		issues += 1
+		push_warning("validate_shutdown_clean: unique_item.the_item not null")
+	return issues

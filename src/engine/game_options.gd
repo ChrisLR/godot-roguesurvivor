@@ -802,7 +802,7 @@ static func is_zup_day(d: int, day: int) -> bool:
 
 ## mode is a GameMode value (enum declared in Engine/Session.cs, not yet
 ## ported) — it is unused by the original body and kept for signature parity.
-func describe_value(mode: int, option: int) -> String:
+func describe_value(_mode: int, option: int) -> String:
 	match option:
 		IDs.GAME_AGGRESSIVE_HUNGRY_CIVILIANS:
 			return "ON    (default ON)" if is_aggressive_hungry_civilians_on else "OFF   (default ON)"
