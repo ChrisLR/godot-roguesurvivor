@@ -61,7 +61,7 @@ func _run() -> void:
 				" keys_seen=", ui._debug_key_count, " last_key=", ui._debug_last_keycode,
 				" in_wait=", ui._debug_in_wait,
 				" intro=", g != null and g.played_intro,
-				" cmds=", ui._commands.size())
+				" cmds=", ui._batch.size())
 		if ui._game != null and ui._game.player != null:
 			game = ui._game
 			if game.session.current_map != null and game.session.current_map.local_time.turn_counter > 5:
@@ -70,7 +70,7 @@ func _run() -> void:
 	if game == null:
 		game = ui._game
 	print("frames pumped: ", frames, " elapsed_ms: ", Time.get_ticks_msec() - start)
-	print("draw commands pending/main: ", ui._pending_commands.size(), "/", ui._commands.size())
+	print("draw commands pending/main: ", ui._pending_commands.size(), "/", ui._batch.size())
 	if game == null or game.player == null:
 		print("UI_TEST_FAIL: player never spawned (game thread stuck or crashed)")
 		quit(1)
@@ -79,9 +79,20 @@ func _run() -> void:
 		" hp=", game.player.hit_points, " map=", game.session.current_map.name)
 	print("map turn: ", game.session.current_map.local_time.turn_counter,
 		" actors: ", game.session.current_map.count_actors)
-	if ui._commands.is_empty():
-		print("UI_TEST_FAIL: no draw commands reached the canvas")
-		quit(1)
-		return
+	if ui._batch.is_empty():
+		# canvas is fed through pooled nodes: any visible pooled node proves
+		# draw commands reached it (the batch staging array drains per frame).
+		var drew_any := false
+		for kind in ui._pools:
+			for n in ui._pools[kind].nodes:
+				if n is CanvasItem and n.visible:
+					drew_any = true
+					break
+			if drew_any:
+				break
+		if not drew_any:
+			print("UI_TEST_FAIL: no draw commands reached the canvas")
+			quit(1)
+			return
 	print("UI_TEST_OK")
 	quit(0)

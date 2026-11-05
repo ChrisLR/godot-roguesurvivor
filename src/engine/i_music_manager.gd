@@ -10,7 +10,7 @@ var is_music_enabled: bool = true:
 	set(value):
 		_set_is_music_enabled(value)
 
-var volume: int = 100:
+var volume: int = 50:
 	get:
 		return _get_volume()
 	set(value):

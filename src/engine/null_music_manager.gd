@@ -26,7 +26,7 @@ func stop() -> void:
 # Property internals: the IMusicManager base getters recurse through these,
 # so they must be overridden to return plain values.
 var _music_enabled: bool = true
-var _volume: int = 100
+var _volume: int = 50
 
 func _get_is_music_enabled() -> bool:
 	return _music_enabled

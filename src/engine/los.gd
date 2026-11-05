@@ -169,26 +169,53 @@ static func can_trace_throw_line(from_location: Location, to_position: Vector2i,
 ## Pros: fixes "holes" in fov : if you can see a tile you can see everything in
 ## its line too.
 ## Cons: rare cases of asymetry in FOV : i can see you, but you can't see me.
-static func _fov_sub(from_location: Location, to_position: Vector2i, max_range: int, visible_set: Dictionary) -> bool:
-	var map: Map = from_location.map
-	var goal := to_position
+## Inlined Bresenham trace (instead of asymetric_bresenham_trace + Callable):
+## avoids one closure allocation per traced tile and one Callable.call per step.
+static func _fov_trace(map: Map, from: Vector2i, goal: Vector2i, max_range: int, visible_set: Dictionary) -> bool:
+	var x_from := from.x
+	var y_from := from.y
+	var x_to := goal.x
+	var y_to := goal.y
+	var delta_x: int = abs(x_to - x_from) << 1
+	var delta_y: int = abs(y_to - y_from) << 1
+	var ix := 1 if x_to > x_from else -1
+	var iy := 1 if y_to > y_from else -1
+	var step_count := 0
 
-	return asymetric_bresenham_trace(max_range,
-		map,
-		from_location.position.x, from_location.position.y,
-		to_position.x, to_position.y,
-		null,
-		func(x: int, y: int) -> bool:
-			var view_through := false
-			if x == goal.x and y == goal.y:
-				view_through = true
-			elif map.is_transparent(x, y):
-				view_through = true
+	if delta_x >= delta_y:
+		var error: int = delta_y - (delta_x >> 1)
+		while x_from != x_to:
+			if error >= 0:
+				if error != 0 or ix > 0:
+					y_from += iy
+				error -= delta_x
+			x_from += ix
+			error += delta_y
+			step_count += 1
+			if step_count > max_range:
+				return false
+			if (x_from == x_to and y_from == y_to) or map.is_transparent(x_from, y_from):
+				visible_set[Vector2i(x_from, y_from)] = true
+			else:
+				return false
+	else:
+		var error: int = delta_x - (delta_y >> 1)
+		while y_from != y_to:
+			if error >= 0:
+				if error != 0 or iy > 0:
+					x_from += ix
+				error -= delta_y
+			y_from += iy
+			error += delta_x
+			step_count += 1
+			if step_count > max_range:
+				return false
+			if (x_from == x_to and y_from == y_to) or map.is_transparent(x_from, y_from):
+				visible_set[Vector2i(x_from, y_from)] = true
+			else:
+				return false
 
-			if view_through:
-				visible_set[Vector2i(x, y)] = true
-
-			return view_through)
+	return true
 
 
 static func compute_fov_for(rules: Rules, actor: Actor, time: WorldTime, weather: int) -> Dictionary:
@@ -208,14 +235,21 @@ static func compute_fov_for(rules: Rules, actor: Actor, time: WorldTime, weather
 	var xmax := p_max.x
 	var ymax := p_max.y
 	var walls_to_fix: Array[Vector2i] = []
+	# Integer form of the distance check: rules.los_distance(from, to) is
+	# sqrt(0.75 * d2), so "los_distance > max_range" is exactly "3 * d2 > 4 *
+	# max_range^2" (both sides non-negative, and 3*d2 vs 4*r^2 are integers,
+	# so no float rounding edge cases). Avoids a sqrt per tile.
+	var max_range_sq4: int = 4 * max_range * max_range
 
 	# 1st pass : trace line and remember walls that are not visible for 2nd pass.
 	for x: int in range(xmin, xmax + 1):
+		var dx := x - from.x
 		for y: int in range(ymin, ymax + 1):
 			var to := Vector2i(x, y)
 
 			# Distance check.
-			if rules.los_distance(from, to) > max_range:
+			var dy := y - from.y
+			if 3 * (dx * dx + dy * dy) > max_range_sq4:
 				continue
 
 			# If we already know tile is visible, pass.
@@ -223,7 +257,7 @@ static func compute_fov_for(rules: Rules, actor: Actor, time: WorldTime, weather
 				continue
 
 			# Trace line.
-			if not _fov_sub(from_location, to, max_range, visible_set):
+			if not _fov_trace(map, from, to, max_range, visible_set):
 				# if its a wall (in FoV terms), remember.
 				var is_fov_wall := false
 				var tile: Tile = map.get_tile_at(x, y)

@@ -71,6 +71,7 @@ var _scent_layer: Node2D
 var _items_layer: Node2D
 var _actors_layer: Node2D
 var _effects_layer: Node2D
+var _world_shapes: Node2D  # world-space lines/rects/points/labels, under the camera
 var _overlay_layer: Control  # screen-space lines/rects/points (HUD)
 var _hud_sprites: Control  # screen-space images (inventory icons, minimap markers, menus)
 var _labels_root: Control
@@ -160,6 +161,12 @@ func _init_view() -> void:
 	_items_layer = $World/Items
 	_actors_layer = $World/Actors
 	_effects_layer = $World/Effects
+	# world-space shapes (e.g. actor health bars): drawn in world pixels and
+	# rendered through the camera, exactly like the map sprites they overlay
+	_world_shapes = Node2D.new()
+	_world_shapes.name = "WorldShapes"
+	_world_shapes.z_index = 9
+	$World.add_child(_world_shapes)
 	_overlay_layer = $UILayer/HUD/Shapes
 	_hud_sprites = $UILayer/HUD/Sprites
 	_labels_root = $UILayer/HUD/Labels
@@ -180,8 +187,11 @@ func _init_view() -> void:
 	_register_pool("actors", _actors_layer, _factory_actor)
 	_register_pool("effects", _effects_layer, _factory_sprite(_effects_layer))
 	_register_pool("screenfx", _hud_sprites, _factory_sprite(_hud_sprites))
-	_register_pool("lines", _overlay_layer, _factory_line)
-	_register_pool("rects", _overlay_layer, _factory_rect)
+	_register_pool("lines", _overlay_layer, _factory_line(_overlay_layer))
+	_register_pool("rects", _overlay_layer, _factory_rect(_overlay_layer))
+	_register_pool("world_lines", _world_shapes, _factory_line(_world_shapes))
+	_register_pool("world_rects", _world_shapes, _factory_rect(_world_shapes))
+	_register_pool("world_labels", _world_shapes, _factory_label)
 	_register_pool("labels", _labels_root, _factory_label)
 	_register_pool("popups", _popups_root, _factory_popup)
 
@@ -250,17 +260,19 @@ func _factory_map_object() -> StaticBody2D:
 	return body
 
 
-func _factory_line() -> Line2D:
-	var ln := Line2D.new()
-	ln.width = 1.0
-	_overlay_layer.add_child(ln)
-	return ln
+func _factory_line(layer: Node) -> Callable:
+	return func() -> Line2D:
+		var ln := Line2D.new()
+		ln.width = 1.0
+		layer.add_child(ln)
+		return ln
 
 
-func _factory_rect() -> ColorRect:
-	var r := ColorRect.new()
-	_overlay_layer.add_child(r)
-	return r
+func _factory_rect(layer: Node) -> Callable:
+	return func() -> ColorRect:
+		var r := ColorRect.new()
+		layer.add_child(r)
+		return r
 
 
 func _factory_label() -> Label:
@@ -340,23 +352,23 @@ func _apply_command(cmd: Dictionary) -> void:
 			_minimap_rect.size = Vector2(MINIMAP_WIDTH, MINIMAP_HEIGHT)
 			_minimap_rect.visible = true
 		"point":
-			var p := _pool_next("rects") as ColorRect
+			var p := _pool_next("world_rects" if cmd.get("world", false) else "rects") as ColorRect
 			p.color = cmd.color
 			p.position = cmd.pos
 			p.size = Vector2(1, 1)
 		"line":
-			var ln := _pool_next("lines") as Line2D
+			var ln := _pool_next("world_lines" if cmd.get("world", false) else "lines") as Line2D
 			ln.points = PackedVector2Array([cmd.from, cmd.to])
 			ln.default_color = cmd.color
 		"rect":
 			# outline rect as a closed Line2D loop
 			var r: Rect2 = cmd.rect
-			var ln2 := _pool_next("lines") as Line2D
+			var ln2 := _pool_next("world_lines" if cmd.get("world", false) else "lines") as Line2D
 			ln2.points = PackedVector2Array([r.position, r.position + Vector2(r.size.x, 0),
 				r.end, r.position + Vector2(0, r.size.y), r.position])
 			ln2.default_color = cmd.color
 		"fill_rect":
-			var fr := _pool_next("rects") as ColorRect
+			var fr := _pool_next("world_rects" if cmd.get("world", false) else "rects") as ColorRect
 			fr.color = cmd.color
 			fr.position = Vector2(cmd.rect.position)
 			fr.size = Vector2(cmd.rect.size)
@@ -422,7 +434,9 @@ func _apply_sprite(id: String, gx: int, gy: int, mod: Color, gray: bool, rot: fl
 
 
 func _apply_string_cmd(cmd: Dictionary) -> void:
-	var label := _pool_next("labels") as Label
+	# world-flagged strings (floating damage numbers) draw in world px under
+	# the camera so they track the view; the rest stay on the HUD.
+	var label := _pool_next("world_labels" if cmd.get("world", false) else "labels") as Label
 	label.text = cmd.text
 	label.position = cmd.pos
 	var bold: bool = cmd.bold

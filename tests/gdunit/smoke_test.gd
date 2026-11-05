@@ -85,6 +85,30 @@ func test_bedroom_item_roll_fully_covered() -> void:
 		assert_that(it).override_failure_message("bedroom roll %d returned an item" % i).is_not_null()
 
 
+func test_infection_effects_in_next_map_turn() -> void:
+	# Regression: next_map_turn called rules.infection_effect_trigger_chance1000
+	# but Rules defined infection_effect_trigger_chance_1000 -> runtime crash
+	# "Nonexistent function" once any actor was infected.
+	game.session.game_mode = Session.GameMode.GM_CORPSES_INFECTION
+	var map: Map = game.session.current_map
+	# Keep the player below the death threshold: player death triggers the
+	# game-over UI flow which blocks on scripted input and can stall headless.
+	var levels := [10, 25, 50, 75, 90]
+	var i := 0
+	for a in map.actors_list:
+		if a.model.abilities.is_undead or a.is_player:
+			continue
+		var hps := game.rules.actor_infection_hps(a)
+		a.infection = int(hps * levels[i % levels.size()] / 100.0)
+		i += 1
+	assert_int(i).is_greater(0)
+	# next_map_turn itself does not bump the world turn counter (next_turn
+	# does); the regression value here is that these calls run without a
+	# "Nonexistent function" script error once actors are infected.
+	for t in 10:
+		game.next_map_turn(map, RogueGame.SimFlags.NOT_SIMULATING)
+
+
 func test_simulate_30_turns() -> void:
 	var session: Session = game.session
 	ui.key_queue.clear()

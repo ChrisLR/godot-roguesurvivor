@@ -259,7 +259,7 @@ func filter_enemies(p_game: RogueGame, percepts) -> Variant:
 	var list = null
 
 	for p: Percept in percepts:
-		var other := p.percepted as Actor
+		var other: Actor = p.percepted if p.percepted is Actor else null
 		if other != null and other != controlled_actor:
 			if p_game.rules.are_enemies(controlled_actor, other):
 				if list == null:
@@ -277,7 +277,7 @@ func filter_non_enemies(p_game: RogueGame, percepts) -> Variant:
 	var list = null
 
 	for p: Percept in percepts:
-		var other := p.percepted as Actor
+		var other: Actor = p.percepted if p.percepted is Actor else null
 		if other != null and other != controlled_actor:
 			if not p_game.rules.are_enemies(controlled_actor, other):
 				if list == null:
@@ -330,7 +330,7 @@ func filter_strongest_scent(_p_game: RogueGame, scents) -> Variant:
 	var p_best: Percept = null
 	var best: SmellSensor.AIScent = null
 	for p: Percept in scents:
-		var ai_scent: SmellSensor.AIScent = p.percepted as SmellSensor.AIScent
+		var ai_scent: SmellSensor.AIScent = p.percepted if p.percepted is SmellSensor.AIScent else null
 		assert(ai_scent != null, "percept not an aiScent")
 		if p_best == null or ai_scent.strength > best.strength:
 			best = ai_scent
@@ -351,7 +351,7 @@ func filter_actors_model(_p_game: RogueGame, percepts, model: ActorModel) -> Var
 	var list = null
 
 	for p: Percept in percepts:
-		var a := p.percepted as Actor
+		var a: Actor = p.percepted if p.percepted is Actor else null
 		if a != null and a.model == model:
 			if list == null:
 				list = []
@@ -368,7 +368,7 @@ func filter_actors(_p_game: RogueGame, percepts, predicate_fn: Callable) -> Vari
 	var list = null
 
 	for p: Percept in percepts:
-		var a := p.percepted as Actor
+		var a: Actor = p.percepted if p.percepted is Actor else null
 		if a != null and predicate_fn.call(a):
 			if list == null:
 				list = []
@@ -380,7 +380,7 @@ func filter_actors(_p_game: RogueGame, percepts, predicate_fn: Callable) -> Vari
 ## C# FilterFireTargets(game, percepts).
 func filter_fire_targets(p_game: RogueGame, percepts) -> Variant:
 	return filter(p_game, percepts, func(p: Percept) -> bool:
-		var other := p.percepted as Actor
+		var other: Actor = p.percepted if p.percepted is Actor else null
 		if other == null:
 			return false
 		return p_game.rules.can_actor_fire_at(controlled_actor, other).ok)
@@ -389,7 +389,7 @@ func filter_fire_targets(p_game: RogueGame, percepts) -> Variant:
 ## C# FilterStacks(game, percepts).
 func filter_stacks(p_game: RogueGame, percepts) -> Variant:
 	return filter(p_game, percepts, func(p: Percept) -> bool:
-		var it := p.percepted as Inventory
+		var it: Inventory = p.percepted if p.percepted is Inventory else null
 		return it != null)
 
 

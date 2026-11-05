@@ -28,8 +28,11 @@ enum SpecialActions {
 }
 
 var _ai: BaseAI
-## LinkedList<Node> ported as Array kept sorted by dist_to_goal, like A*.
-var _nodes: Array[RouteNode] = []
+## Open list as a binary min-heap keyed on dist_to_goal (like an A* open list),
+## plus a position index for O(1) node lookup. Replaces the old sorted Array,
+## whose linear scans made the search O(n^2).
+var _heap: Array[RouteNode] = []
+var _node_map: Dictionary = {}  # Vector2i -> RouteNode
 
 ## Actions the RouteFinder for this AI is allowed to try when checking route.
 var allowed_actions: int = SpecialActions.NONE
@@ -61,35 +64,32 @@ func can_reach_simple(game: RogueGame, dest: Vector2i, max_dist: int, distance_f
 		return can_move_in(game, a, map, dest)
 
 	# search similar to A*...
-	_nodes.clear()
-	_nodes.append(_make_node(start, distance_fn.call(start, dest)))
+	_heap.clear()
+	_node_map.clear()
+	var start_node := _make_node(start, distance_fn.call(start, dest))
+	_heap_push(start_node)
+	_node_map[start] = start_node
 	# Safety cap: exploration is bounded by map size + strictly-decreasing
 	# distance, but never loop unbounded if that invariant ever breaks.
 	var iterations := 0
 	const MAX_ITERATIONS := 100000
-	while true:
+	while not _heap.is_empty():
 		iterations += 1
 		if iterations > MAX_ITERATIONS:
 			push_warning("RouteFinder.can_reach_simple: iteration cap hit, giving up.")
 			return false
-		# get most promising node, nodes are sorted by their distance to goal.
-		var current_idx: int = -1
-		for i: int in _nodes.size():
-			if _nodes[i].pos == dest:
-				return true  # found goal
-			if adj_to_dest_is_goal and distance_fn.call(_nodes[i].pos, dest) == 1:
-				return true  # found adj to goal
-			if not _nodes[i].is_visited:
-				current_idx = i
-				break  # visit this one
-		# no unvisited node left : out of nodes to explore.
-		if current_idx < 0:
-			return false
+		# get most promising node: min dist_to_goal in the heap.
+		var current: RouteNode = _heap_pop()
+		if current.pos == dest:
+			return true  # found goal
+		if adj_to_dest_is_goal and distance_fn.call(current.pos, dest) == 1:
+			return true  # found adj to goal
+		if current.is_visited:
+			continue
+		current.is_visited = true
 
 		# explore this node by looking at adj tiles.
 		# only explore tiles that are not too far, closer to the goal and can be moved in.
-		var current: RouteNode = _nodes[current_idx]
-		current.is_visited = true
 		var current_dist_to_goal: int = distance_fn.call(current.pos, dest)
 		for dir in Direction.COMPASS:
 			var adj: Vector2i = current.pos + dir.vector
@@ -100,34 +100,51 @@ func can_reach_simple(game: RogueGame, dest: Vector2i, max_dist: int, distance_f
 				continue
 			if not can_move_in(game, a, map, adj):
 				continue
-			var adj_node: RouteNode = get_node(adj)
-			var explore_it: bool = false
-			if adj_node == null:
-				# new one to explore.
-				adj_node = _make_node(adj, adj_dist_to_goal)
-				explore_it = true
-			else:
-				# explore only if not already explored.
-				explore_it = not adj_node.is_visited
-			if explore_it:
-				insert(adj_node)
+			# skip tiles already in the open list or already explored.
+			if _node_map.has(adj):
+				continue
+			var adj_node := _make_node(adj, adj_dist_to_goal)
+			_heap_push(adj_node)
+			_node_map[adj] = adj_node
 	return false
 
 
-## Insert a new node and keep nodes list sorted on distance to goal.
-func insert(new_node: RouteNode) -> void:
-	var idx: int = 0
-	while idx < _nodes.size() and _nodes[idx].dist_to_goal < new_node.dist_to_goal:
-		idx += 1
-	_nodes.insert(idx, new_node)
+## Push a node onto the open-list heap, keyed on dist_to_goal.
+func _heap_push(n: RouteNode) -> void:
+	_heap.append(n)
+	var i: int = _heap.size() - 1
+	while i > 0:
+		var parent: int = (i - 1) / 2
+		if _heap[parent].dist_to_goal <= _heap[i].dist_to_goal:
+			break
+		var tmp: RouteNode = _heap[parent]
+		_heap[parent] = _heap[i]
+		_heap[i] = tmp
+		i = parent
 
 
-## Get node in list at position, if any. Null if no node there.
-func get_node(at: Vector2i) -> RouteNode:
-	for n in _nodes:
-		if n.pos == at:
-			return n
-	return null
+## Pop the node with the smallest dist_to_goal from the heap.
+func _heap_pop() -> RouteNode:
+	var top: RouteNode = _heap[0]
+	var last: RouteNode = _heap.pop_back()
+	if not _heap.is_empty():
+		_heap[0] = last
+		var i := 0
+		while true:
+			var l: int = i * 2 + 1
+			var r: int = l + 1
+			var smallest: int = i
+			if l < _heap.size() and _heap[l].dist_to_goal < _heap[smallest].dist_to_goal:
+				smallest = l
+			if r < _heap.size() and _heap[r].dist_to_goal < _heap[smallest].dist_to_goal:
+				smallest = r
+			if smallest == i:
+				break
+			var tmp: RouteNode = _heap[smallest]
+			_heap[smallest] = _heap[i]
+			_heap[i] = tmp
+			i = smallest
+	return top
 
 
 ## Check if actor can move in this tile.

@@ -16,7 +16,7 @@ var _players_ready := false
 
 var _sounds: Dictionary = {}  # name -> AudioStream
 var _music_enabled_internal := true
-var _volume_internal := 100
+var _volume_internal := 50
 var _priority_internal := MusicPriority.PRIORITY_NULL
 var _current_music := ""
 var _looping := false

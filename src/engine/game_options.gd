@@ -23,6 +23,7 @@ enum IDs {
 	GAME_SIMULATE_DISTRICTS,
 	GAME_SIMULATE_SLEEP,
 	GAME_SIM_THREAD,
+	GAME_TURBO_SIM,
 	GAME_SPAWN_SKELETON_CHANCE,
 	GAME_SPAWN_ZOMBIE_CHANCE,
 	GAME_SPAWN_ZOMBIE_MASTER_CHANCE,
@@ -135,6 +136,7 @@ var _simulate_districts: int
 var _cached_sim_ratio_float: float
 var _simulate_when_sleeping: bool
 var _sim_thread: bool
+var _turbo_sim: bool
 var _show_player_tags_on_minimap: bool
 var _spawn_skeleton_chance: int
 var _spawn_zombie_chance: int
@@ -327,6 +329,13 @@ var sim_thread: bool:
 		return _sim_thread
 	set(value):
 		_sim_thread = value
+
+
+var turbo_sim: bool:
+	get:
+		return _turbo_sim
+	set(value):
+		_turbo_sim = value
 
 
 var district_size: int:
@@ -554,7 +563,7 @@ func reset_to_default_values() -> void:
 	_max_undeads = DEFAULT_MAX_UNDEADS
 	_max_dogs = DEFAULT_MAX_DOGS
 	_play_music = true
-	_music_volume = 100
+	_music_volume = 50
 	_anim_delay = true
 	_show_minimap = true
 	_show_player_tags_on_minimap = true
@@ -563,6 +572,7 @@ func reset_to_default_values() -> void:
 	simulate_districts = DEFAULT_SIM_DISTRICTS
 	_simulate_when_sleeping = false
 	_sim_thread = true
+	_turbo_sim = true
 	_spawn_skeleton_chance = DEFAULT_SPAWN_SKELETON_CHANCE
 	_spawn_zombie_chance = DEFAULT_SPAWN_ZOMBIE_CHANCE
 	_spawn_zombie_master_chance = DEFAULT_SPAWN_ZOMBIE_MASTER_CHANCE
@@ -619,6 +629,7 @@ static func name_of(option: int) -> String:
 		IDs.GAME_SIMULATE_DISTRICTS: return "   (Sim) Districts Simulation"
 		IDs.GAME_SIMULATE_SLEEP: return "   (Sim) Simulate when Sleeping"
 		IDs.GAME_SIM_THREAD: return "   (Sim) Synchronous Simulation"
+		IDs.GAME_TURBO_SIM: return "   (Sim) Turbo Simulation"
 		IDs.GAME_SPAWN_SKELETON_CHANCE: return "(Undead) Spawn Skeleton chance"
 		IDs.GAME_SPAWN_ZOMBIE_CHANCE: return "(Undead) Spawn Zombie chance"
 		IDs.GAME_SPAWN_ZOMBIE_MASTER_CHANCE: return "(Undead) Spawn Zombie Master chance"
@@ -691,6 +702,8 @@ static func describe(option: int) -> String:
 			return "Performs simulation when you are sleeping. Recommended if synchronous sim is off."
 		IDs.GAME_SIM_THREAD:
 			return "Performs simulation in a separate thread while you are playing. Recommended unless the game is unstable."
+		IDs.GAME_TURBO_SIM:
+			return "Skips full AI on every map you cannot currently see (uses the same low-detail path as sleep simulation). Population there only grows via events. Recommended if turns feel slow."
 		IDs.GAME_SPAWN_SKELETON_CHANCE:
 			return "YOU SHOULDNT BE READING THIS :)"
 		IDs.GAME_SPAWN_ZOMBIE_CHANCE:
@@ -846,6 +859,8 @@ func describe_value(_mode: int, option: int) -> String:
 			return "YES   (default NO)" if skeletons_upgrade else "NO    (default NO)"
 		IDs.GAME_SIM_THREAD:
 			return "YES*  (default YES)" if sim_thread else "NO*   (default YES)"
+		IDs.GAME_TURBO_SIM:
+			return "YES*  (default YES)" if turbo_sim else "NO*   (default YES)"
 		IDs.GAME_SIMULATE_DISTRICTS:
 			return "%-4s* (default %s)" % [sim_ratio_name(simulate_districts), sim_ratio_name(DEFAULT_SIM_DISTRICTS)]
 		IDs.GAME_SIMULATE_SLEEP:

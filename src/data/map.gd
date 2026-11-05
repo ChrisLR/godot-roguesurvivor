@@ -530,7 +530,7 @@ func try_remove_corpse_of(a: Actor) -> bool:
 
 
 func _remove_corpse_from_pos(c: Corpse) -> void:
-	var list: Array[Corpse] = aux_corpses_by_position.get(c.position)
+	var list = aux_corpses_by_position.get(c.position)
 	if list != null:
 		list.erase(c)
 		if list.is_empty():
@@ -538,7 +538,7 @@ func _remove_corpse_from_pos(c: Corpse) -> void:
 
 
 func _insert_corpse_at_pos(c: Corpse) -> void:
-	var list: Array[Corpse] = aux_corpses_by_position.get(c.position)
+	var list = aux_corpses_by_position.get(c.position)
 	if list != null:
 		list.insert(0, c)
 	else:

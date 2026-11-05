@@ -362,7 +362,9 @@ func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
 				func(p: Percept) -> bool:
 					if p.turn != turn_counter:
 						return true
-					var other := p.percepted as Actor
+					var other: Actor = p.percepted if p.percepted is Actor else null
+					if other == null:
+						return true
 					# dont bother player or someone we can't trade with or already did trade.
 					if other.is_player:
 						return true
@@ -565,7 +567,7 @@ func select_action(game: RogueGame, percepts: Array[Percept]) -> ActorAction:
 	# update percept.
 	var seeing_soldier: Percept = filter_first(game, map_percepts,
 		func(p: Percept) -> bool:
-			var other := p.percepted as Actor
+			var other: Actor = p.percepted if p.percepted is Actor else null
 			if other == null || other == _actor:
 				return false
 			return is_soldier(other))

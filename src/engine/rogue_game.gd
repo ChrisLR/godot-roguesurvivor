@@ -264,7 +264,11 @@ var VERB_WAKE_UP := Verb.new("wake up", "wakes up")
 
 # Port of the Overlay inner classes (RogueGame.cs lines 452-644).
 class Overlay:
-	func draw(_p_ui: IRogueUI) -> void:
+	## true = anchored to a map position: drawn in world px (through the
+	## camera) so it tracks the view; false = screen-space (HUD).
+	var map_anchored := false
+
+	func draw(_p_ui: IRogueUI, _world_origin: Vector2i) -> void:
 		assert(false, "abstract method")
 
 
@@ -273,11 +277,12 @@ class OverlayImage extends Overlay:
 	var image_id: String
 
 	func _init(p_screen_position: Vector2i, p_image_id: String) -> void:
+		map_anchored = true
 		screen_position = p_screen_position
 		image_id = p_image_id
 
-	func draw(p_ui: IRogueUI) -> void:
-		p_ui.ui_draw_image(image_id, screen_position.x, screen_position.y)
+	func draw(p_ui: IRogueUI, p_world_origin: Vector2i) -> void:
+		p_ui.ui_draw_image(image_id, screen_position.x + p_world_origin.x, screen_position.y + p_world_origin.y)
 
 
 class OverlayTransparentImage extends Overlay:
@@ -286,12 +291,13 @@ class OverlayTransparentImage extends Overlay:
 	var image_id: String
 
 	func _init(p_alpha: float, p_screen_position: Vector2i, p_image_id: String) -> void:
+		map_anchored = true
 		alpha = p_alpha
 		screen_position = p_screen_position
 		image_id = p_image_id
 
-	func draw(p_ui: IRogueUI) -> void:
-		p_ui.ui_draw_transparent_image(alpha, image_id, screen_position.x, screen_position.y)
+	func draw(p_ui: IRogueUI, p_world_origin: Vector2i) -> void:
+		p_ui.ui_draw_transparent_image(alpha, image_id, screen_position.x + p_world_origin.x, screen_position.y + p_world_origin.y)
 
 
 class OverlayText extends Overlay:
@@ -301,13 +307,14 @@ class OverlayText extends Overlay:
 	var shadow_color: Color = Color.TRANSPARENT
 
 	func _init(p_screen_position: Vector2i, p_color: Color, p_text: String, p_shadow_color: Color = Color.TRANSPARENT) -> void:
+		map_anchored = true
 		screen_position = p_screen_position
 		color = p_color
 		text = p_text
 		shadow_color = p_shadow_color
 
-	func draw(p_ui: IRogueUI) -> void:
-		p_ui.ui_draw_string(color, text, screen_position.x, screen_position.y, shadow_color)
+	func draw(p_ui: IRogueUI, p_world_origin: Vector2i) -> void:
+		p_ui.ui_draw_string(color, text, screen_position.x + p_world_origin.x, screen_position.y + p_world_origin.y, shadow_color)
 
 
 class OverlayLine extends Overlay:
@@ -316,24 +323,29 @@ class OverlayLine extends Overlay:
 	var color: Color
 
 	func _init(p_screen_from: Vector2i, p_color: Color, p_screen_to: Vector2i) -> void:
+		map_anchored = true
 		screen_from = p_screen_from
 		color = p_color
 		screen_to = p_screen_to
 
-	func draw(p_ui: IRogueUI) -> void:
-		p_ui.ui_draw_line(color, screen_from.x, screen_from.y, screen_to.x, screen_to.y)
+	func draw(p_ui: IRogueUI, p_world_origin: Vector2i) -> void:
+		p_ui.ui_draw_line(color, screen_from.x + p_world_origin.x, screen_from.y + p_world_origin.y, screen_to.x + p_world_origin.x, screen_to.y + p_world_origin.y)
 
 
 class OverlayRect extends Overlay:
 	var rectangle: Rect2i
 	var color: Color
 
-	func _init(p_color: Color, p_rect: Rect2i) -> void:
+	## p_map_anchored: true (default) for boxes around map positions (actors,
+	## map objects, tiles) — drawn in world px through the camera; false for
+	## the inventory/corpse panel highlights, whose coords are canvas px.
+	func _init(p_color: Color, p_rect: Rect2i, p_map_anchored: bool = true) -> void:
 		color = p_color
 		rectangle = p_rect
+		map_anchored = p_map_anchored
 
-	func draw(p_ui: IRogueUI) -> void:
-		p_ui.ui_draw_rect(color, rectangle)
+	func draw(p_ui: IRogueUI, p_world_origin: Vector2i) -> void:
+		p_ui.ui_draw_rect(color, Rect2(rectangle.position + p_world_origin, rectangle.size))
 
 
 class OverlayPopup extends Overlay:
@@ -350,7 +362,7 @@ class OverlayPopup extends Overlay:
 		box_fill_color = p_box_fill_color
 		screen_position = p_screen_pos
 
-	func draw(p_ui: IRogueUI) -> void:
+	func draw(p_ui: IRogueUI, _world_origin: Vector2i) -> void:
 		p_ui.ui_draw_popup(lines, text_color, box_border_color, box_fill_color, screen_position.x, screen_position.y)
 
 
@@ -372,7 +384,7 @@ class OverlayPopupTitle extends Overlay:
 		box_fill_color = p_box_fill_color
 		screen_position = p_screen_pos
 
-	func draw(p_ui: IRogueUI) -> void:
+	func draw(p_ui: IRogueUI, _world_origin: Vector2i) -> void:
 		p_ui.ui_draw_popup_title(title, title_color, lines, text_color, box_border_color, box_fill_color, screen_position.x, screen_position.y)
 
 
@@ -394,7 +406,7 @@ class OverlayPopupTitleColors extends Overlay:
 		box_fill_color = p_box_fill_color
 		screen_position = p_screen_pos
 
-	func draw(p_ui: IRogueUI) -> void:
+	func draw(p_ui: IRogueUI, _world_origin: Vector2i) -> void:
 		p_ui.ui_draw_popup_title_colors(title, title_color, lines, colors, box_border_color, box_fill_color, screen_position.x, screen_position.y)
 
 
@@ -415,6 +427,7 @@ enum SimFlags {
 	NOTHING = 0,
 	NOT_SIMULATING = (1 << 0),
 	LODETAIL_TURN = (1 << 1),
+	TURBO_TURN = (1 << 3),  # turbo: lo-detail on a waking (non-sim) turn; implies LODETAIL via the gate below
 }
 
 static var options: GameOptions = null
@@ -606,6 +619,12 @@ func game_loop() -> void:
 
 ## Port of AdvancePlay(Map, SimFlags): one actor step of the play loop.
 func advance_play_map(map: Map, sim: int) -> void:
+	# Turbo: waking (NOT_SIMULATING) turns run every map but the player's own
+	# in lo-detail; the player's map always keeps full fidelity. Sleeping sims
+	# (LODETAIL_TURN) already apply district-wide — nothing to downgrade.
+	if sim == SimFlags.NOT_SIMULATING and options.turbo_sim \
+			and map != session.current_map:
+		sim = SimFlags.TURBO_TURN
 	# 0. Secret maps: don't play the map at all, jump in time.
 	if map.is_secret:
 		map.local_time.turn_counter += 1
@@ -1758,6 +1777,7 @@ func handle_options(_ingame: bool) -> void:
 		GameOptions.IDs.GAME_SIMULATE_DISTRICTS,
 		GameOptions.IDs.GAME_SIM_THREAD,
 		GameOptions.IDs.GAME_SIMULATE_SLEEP,
+		GameOptions.IDs.GAME_TURBO_SIM,
 		# death
 		GameOptions.IDs.GAME_DEATH_SCREENSHOT,
 		GameOptions.IDs.GAME_PERMADEATH,
@@ -1893,6 +1913,7 @@ func handle_options(_ingame: bool) -> void:
 						if options.simulate_districts != GameOptions.SimRatio.OFF:
 							options.simulate_districts -= 1
 					GameOptions.IDs.GAME_SIMULATE_SLEEP: options.simulate_when_sleeping = not options.simulate_when_sleeping
+					GameOptions.IDs.GAME_TURBO_SIM: options.turbo_sim = not options.turbo_sim
 					GameOptions.IDs.GAME_SIM_THREAD: options.sim_thread = not options.sim_thread
 					GameOptions.IDs.GAME_ZOMBIFICATION_CHANCE: options.zombification_chance -= 5
 					GameOptions.IDs.GAME_REVEAL_STARTING_DISTRICT: options.reveal_starting_district = not options.reveal_starting_district
@@ -1937,6 +1958,7 @@ func handle_options(_ingame: bool) -> void:
 						if options.simulate_districts != GameOptions.SimRatio.FULL:
 							options.simulate_districts += 1
 					GameOptions.IDs.GAME_SIMULATE_SLEEP: options.simulate_when_sleeping = not options.simulate_when_sleeping
+					GameOptions.IDs.GAME_TURBO_SIM: options.turbo_sim = not options.turbo_sim
 					GameOptions.IDs.GAME_SIM_THREAD: options.sim_thread = not options.sim_thread
 					GameOptions.IDs.GAME_ZOMBIFICATION_CHANCE: options.zombification_chance += 5
 					GameOptions.IDs.GAME_REVEAL_STARTING_DISTRICT: options.reveal_starting_district = not options.reveal_starting_district
@@ -2368,7 +2390,7 @@ func regen_actor_sanity(actor: Actor, san_regen: int) -> void:
 
 
 func next_map_turn(map: Map, sim: int) -> void:
-	var is_lo_detail: bool = (sim & SimFlags.LODETAIL_TURN) != 0
+	var is_lo_detail: bool = (sim & (SimFlags.LODETAIL_TURN | SimFlags.TURBO_TURN)) != 0
 
 	# (the following are skipped in lodetail turns)
 	# 0. Raise the deads; Check infections (non STD)
@@ -4719,9 +4741,10 @@ func handle_mouse_inventory(mouse_pos: Vector2i, mouse_buttons: int) -> Dictiona
 	var is_player_inventory: bool = (inv == player.inventory)
 	var has_done_action := false
 	clear_overlays()
+	# inventory panel coordinates are canvas px on the HUD: screen-space rect.
 	var item_pos: Vector2i = res.item_pos
-	add_overlay(OverlayRect.new(Color.CYAN, Rect2i(item_pos.x, item_pos.y, 32, 32)))
-	add_overlay(OverlayRect.new(Color.CYAN, Rect2i(item_pos.x + 1, item_pos.y + 1, 30, 30)))
+	add_overlay(OverlayRect.new(Color.CYAN, Rect2i(item_pos.x, item_pos.y, 32, 32), false))
+	add_overlay(OverlayRect.new(Color.CYAN, Rect2i(item_pos.x + 1, item_pos.y + 1, 30, 30), false))
 	var it: Item = res.item
 	if it != null:
 		var lines: Array = describe_item_long(it, is_player_inventory, res.i_slot)
@@ -4838,9 +4861,10 @@ func handle_mouse_over_corpses(mouse_pos: Vector2i, mouse_buttons: int) -> Dicti
 	# Do corpse stuff.
 	var has_done_action := false
 	clear_overlays()
+	# corpse panel coordinates are canvas px on the HUD: screen-space rect.
 	var corpse_pos: Vector2i = res.corpse_pos
-	add_overlay(OverlayRect.new(Color.CYAN, Rect2i(corpse_pos.x, corpse_pos.y, 32, 32)))
-	add_overlay(OverlayRect.new(Color.CYAN, Rect2i(corpse_pos.x + 1, corpse_pos.y + 1, 30, 30)))
+	add_overlay(OverlayRect.new(Color.CYAN, Rect2i(corpse_pos.x, corpse_pos.y, 32, 32), false))
+	add_overlay(OverlayRect.new(Color.CYAN, Rect2i(corpse_pos.x + 1, corpse_pos.y + 1, 30, 30), false))
 
 	var lines: Array = describe_corpse_long(corpse, true)
 	var longest_line: int = 1 + find_longest_line(lines)
@@ -7241,7 +7265,40 @@ func handle_player_order_follower_to_give_items(_player: Actor, follower: Actor)
 #endregion
 
 
+## Budget-AI fast turn (turbo_sim). Smoke-and-mirrors approximation of the
+## full action graph on maps the player cannot currently see: melee if an
+## enemy is adjacent (same combat primitive, no RouteFinder/FOV), wait
+## otherwise; flat gauges decay like next_map_turn's per-turn block dies;
+## starvation zombification rolls through the same rules as the slow path.
+func do_fast_turn(actor: Actor) -> void:
+	var map: Map = actor.location.map
+	# Gauges: flat per-turn decay; living actors only (undead don't hunger).
+	if actor.model == null or not actor.model.abilities.is_undead:
+		actor.food_points -= 1
+		actor.sleep_points -= 1
+		if actor.food_points <= 0:
+			actor.food_points = 0
+			kill_actor(actor, actor, "starved to death")
+			if rules.has_immediate_zombification(session.game_mode) \
+					and rules.roll_chance(options.starved_zombification_chance):
+				zombify(null, actor, false)
+			return
+	# Melee-or-wait: any adjacent enemy, fought with the same primitive.
+	for d: Direction in Direction.COMPASS:
+		var enemy: Actor = map.get_actor_at(actor.location.plus(d).position)
+		if enemy != null and rules.are_enemies(actor, enemy):
+			do_melee_attack(actor, enemy)
+			return
+	do_wait(actor)
+
+
 func handle_ai_actor(ai_actor: Actor) -> void:
+	# Budget-AI fast turn (turbo_sim): off-screen maps fake the full action
+	# graph; the player's own map always keeps full fidelity.
+	if options.turbo_sim and ai_actor.location != null \
+			and ai_actor.location.map != session.current_map:
+		do_fast_turn(ai_actor)
+		return
 	# Guard: actor may have been removed from its map by a chain reaction
 	# (explosion, trap) earlier this turn; skip if location is invalid.
 	if ai_actor.location == null or ai_actor.location.map == null:
@@ -13337,9 +13394,17 @@ func redraw_play_screen() -> void:
 	if player != null and player.sheet.skill_table != null and player.sheet.skill_table.count_skills() > 0:
 		draw_actor_skill_table(player, RIGHTPANEL_TEXT_X, SKILLTABLE_Y)
 
-	# overlays
+	# overlays: map-anchored ones (target boxes, damage numbers, ...) draw in
+	# world px through the camera so they track the view; popups and panel
+	# highlights draw in view-local screen px on the HUD.
+	var overlay_world_origin: Vector2i = map_view_rect.position * TILE_SIZE
 	for o in overlays:
-		o.draw(ui)
+		if o.map_anchored:
+			ui.ui_set_world_draw(true)
+			o.draw(ui, overlay_world_origin)
+			ui.ui_set_world_draw(false)
+		else:
+			o.draw(ui, Vector2i.ZERO)
 
 	# DEV STATS (C# #if DEBUG block, kept as a runtime option check)
 	if options.dev_show_actors_stats:

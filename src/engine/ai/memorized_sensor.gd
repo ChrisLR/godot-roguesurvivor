@@ -39,7 +39,7 @@ func sense(game: RogueGame, actor: Actor) -> Array[Percept]:
 	i = 0
 	while i < _percepts.size():
 		var p: Percept = _percepts[i]
-		var a := p.percepted as Actor
+		var a: Actor = p.percepted if p.percepted is Actor else null
 		if a != null and (a.is_dead or a.location.map != actor.location.map):
 			_percepts.remove_at(i)
 		else:
@@ -54,7 +54,10 @@ func sense(game: RogueGame, actor: Actor) -> Array[Percept]:
 		# Update?
 		var has_updated := false
 		for old_p: Percept in _percepts:
-			if old_p.percepted == turn_p.percepted:
+			# percepted may be a non-object (corpse list Array); Object == Array
+			# is a runtime error, so only compare when both sides are same kind.
+			if (old_p.percepted is Object) == (turn_p.percepted is Object) \
+					and old_p.percepted == turn_p.percepted:
 				old_p.location = turn_p.location
 				old_p.turn = turn_p.turn
 				has_updated = true

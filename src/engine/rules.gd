@@ -2577,7 +2577,7 @@ func actor_infection_percent(a: Actor) -> int:
 	return int(100 * a.infection / actor_infection_hps(a))
 
 
-func infection_effect_trigger_chance_1000(infection_percent: int) -> int:
+func infection_effect_trigger_chance1000(infection_percent: int) -> int:
 	return INFECTION_EFFECT_TRIGGER_CHANCE_1000 + infection_percent / 5
 
 
